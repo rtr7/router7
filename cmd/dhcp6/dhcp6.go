@@ -1,4 +1,4 @@
-// Binary dhcp6 obtains a DHCPv6 lease, persists its contents to
+// Binary dhcp6 obtains a DHCPv6 lease, persists it to
 // /perm/dhcp6/wire/lease.json and notifies netconfigd.
 package main
 

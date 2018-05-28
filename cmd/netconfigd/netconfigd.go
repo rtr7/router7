@@ -21,12 +21,21 @@ func logic() error {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
 	for {
-		if err := netconfig.Apply("uplink0", "/perm/"); err != nil {
+		err := netconfig.Apply("uplink0", "/perm/")
+		// Notify gokrazy about new addresses (netconfig.Apply might have
+		// modified state before returning an error) so that listeners can be
+		// updated.
+		p, _ := os.FindProcess(1)
+		if err := p.Signal(syscall.SIGHUP); err != nil {
+			log.Printf("kill -HUP 1: %v", err)
+		}
+		if err != nil {
 			return err
 		}
-		if *linger {
-			<-ch
+		if !*linger {
+			break
 		}
+		<-ch
 	}
 	return nil
 }

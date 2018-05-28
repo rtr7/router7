@@ -114,7 +114,7 @@ func TestNetconfig(t *testing.T) {
 	if !addrRe.MatchString(string(addrs)) {
 		t.Fatalf("regexp %s does not match %s", addrRe, string(addrs))
 	}
-	addr6Re := regexp.MustCompile(`(?m)^\s*inet6 2a02:168:4a00::1/48 scope global\s*$`)
+	addr6Re := regexp.MustCompile(`(?m)^\s*inet6 2a02:168:4a00::1/64 scope global\s*$`)
 	if !addr6Re.MatchString(string(addrs)) {
 		t.Fatalf("regexp %s does not match %s", addr6Re, string(addrs))
 	}

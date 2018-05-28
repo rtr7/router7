@@ -1,4 +1,4 @@
-// Binary dhcp4 obtains a DHCPv4 lease, persists its contents to
+// Binary dhcp4 obtains a DHCPv4 lease, persists it to
 // /perm/dhcp4/wire/lease.json and notifies netconfigd.
 package main
 

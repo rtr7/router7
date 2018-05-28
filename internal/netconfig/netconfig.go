@@ -6,11 +6,9 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -123,6 +121,10 @@ func applyDhcp6(iface, dir string) error {
 		// pick the first address of the prefix, e.g. address 2a02:168:4a00::1
 		// for prefix 2a02:168:4a00::/48
 		prefix.IP[len(prefix.IP)-1] = 1
+		// Use the first /64 subnet within larger prefixes
+		if ones, bits := prefix.Mask.Size(); ones < 64 {
+			prefix.Mask = net.CIDRMask(64, bits)
+		}
 		addr, err := netlink.ParseAddr(prefix.String())
 		if err != nil {
 			return err
@@ -220,12 +222,23 @@ func applyFirewall() error {
 
 func applySysctl() error {
 	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1"), 0644); err != nil {
-		return err
+		return fmt.Errorf("sysctl(net.ipv4.ip_forward=1): %v", err)
 	}
+
+	if err := ioutil.WriteFile("/proc/sys/net/ipv6/conf/all/forwarding", []byte("1"), 0644); err != nil {
+		return fmt.Errorf("sysctl(net.ipv6.conf.all.forwarding=1): %v", err)
+	}
+
+	if err := ioutil.WriteFile("/proc/sys/net/ipv6/conf/uplink0/accept_ra", []byte("2"), 0644); err != nil {
+		return fmt.Errorf("sysctl(net.ipv6.conf.uplink0.accept_ra=2): %v", err)
+	}
+
 	return nil
 }
 
 func Apply(iface, dir string) error {
+
+	// TODO: split into two parts: delay the up until later
 	if err := applyInterfaces(dir); err != nil {
 		return err
 	}
@@ -244,12 +257,6 @@ func Apply(iface, dir string) error {
 
 	if err := applyFirewall(); err != nil {
 		return err
-	}
-
-	// Notify gokrazy init of new addresses
-	p, _ := os.FindProcess(1)
-	if err := p.Signal(syscall.SIGHUP); err != nil {
-		log.Printf("send SIGHUP to init: %v", err)
 	}
 
 	return nil
