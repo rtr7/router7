@@ -32,6 +32,8 @@ func logic() error {
 	c := dhcp4.Client{
 		Interface: iface,
 	}
+	usr2 := make(chan os.Signal, 1)
+	signal.Notify(usr2, syscall.SIGUSR2)
 	for c.ObtainOrRenew() {
 		if err := c.Err(); err != nil {
 			log.Printf("Temporary error: %v", err)
@@ -48,7 +50,15 @@ func logic() error {
 		if err := notify.Process("/user/netconfi", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying netconfig: %v", err)
 		}
-		time.Sleep(time.Until(c.Config().RenewAfter))
+		select {
+		case <-time.After(time.Until(c.Config().RenewAfter)):
+			// fallthrough and renew the DHCP lease
+		case <-usr2:
+			if err := c.Release(); err != nil {
+				return err
+			}
+			os.Exit(125) // quit supervision by gokrazy
+		}
 	}
 	return c.Err() // permanent error
 }

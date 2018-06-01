@@ -36,6 +36,9 @@ type Client struct {
 	cfg          Config
 	timeNow      func() time.Time
 	randRead     func([]byte) (int, error)
+
+	// last DHCPACK packet for renewal/release
+	ack dhcp4.Packet
 }
 
 // ObtainOrRenew returns false when encountering a permanent error.
@@ -87,6 +90,7 @@ func (c *Client) ObtainOrRenew() bool {
 		c.err = fmt.Errorf("received DHCPNAK")
 		return true // temporary error
 	}
+	c.ack = ack
 	opts := ack.ParseOptions()
 
 	// DHCPACK (described in RFC2131 4.3.1)
@@ -129,6 +133,12 @@ func (c *Client) ObtainOrRenew() bool {
 	}
 	c.cfg.RenewAfter = c.timeNow().Add(renewalTime)
 	return true
+}
+
+func (c *Client) Release() error {
+	err := c.dhcp.Release(c.ack)
+	c.ack = nil
+	return err
 }
 
 func (c *Client) Err() error {
