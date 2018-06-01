@@ -5,18 +5,20 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"syscall"
 	"time"
 
 	"router7/internal/dhcp4"
 	"router7/internal/notify"
+	"router7/internal/teelogger"
 )
+
+var log = teelogger.NewConsole()
 
 func logic() error {
 	const configPath = "/perm/dhcp4/wire/lease.json"
@@ -35,9 +37,7 @@ func logic() error {
 			log.Printf("Temporary error: %v", err)
 			continue
 		}
-		// TODO: use a logger which writes to /dev/console
 		log.Printf("lease: %+v", c.Config())
-		ioutil.WriteFile("/dev/console", []byte(fmt.Sprintf("lease: %+v\n", c.Config())), 0600)
 		b, err := json.Marshal(c.Config())
 		if err != nil {
 			return err
@@ -47,7 +47,6 @@ func logic() error {
 		}
 		if err := notify.Process("/user/netconfi", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying netconfig: %v", err)
-			ioutil.WriteFile("/dev/console", []byte(fmt.Sprintf("notifying netconfigd: %+v\n", err)), 0600)
 		}
 		time.Sleep(time.Until(c.Config().RenewAfter))
 	}
