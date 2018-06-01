@@ -78,9 +78,7 @@ func (c *Client) ObtainOrRenew() bool {
 		dhcp.RandRead = c.randRead
 		c.dhcp = dhcp
 	})
-	if c.err != nil {
-		return false
-	}
+	// TODO: renew if c.ack != nil, fall back if renewal fails
 	ok, ack, err := c.dhcpRequest()
 	if err != nil {
 		c.err = err
