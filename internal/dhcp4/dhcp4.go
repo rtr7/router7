@@ -9,6 +9,7 @@ import (
 	"log"
 	"net"
 	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/sys/unix"
@@ -81,7 +82,11 @@ func (c *Client) ObtainOrRenew() bool {
 	// TODO: renew if c.ack != nil, fall back if renewal fails
 	ok, ack, err := c.dhcpRequest()
 	if err != nil {
-		c.err = err
+		if errno, ok := err.(syscall.Errno); ok && errno == syscall.EAGAIN {
+			c.err = fmt.Errorf("DHCP: timeout (server(s) unreachable)")
+			return true // temporary error
+		}
+		c.err = fmt.Errorf("DHCP: %v", err)
 		return true // temporary error
 	}
 	if !ok {
