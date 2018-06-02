@@ -88,6 +88,7 @@ func TestNetconfig(t *testing.T) {
 
 	nsSetup := []*exec.Cmd{
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "dummy0", "type", "dummy"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "uplink0", "type", "dummy"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "dummy0", "address", "02:73:53:00:ca:fe"),
 	}
 
