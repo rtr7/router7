@@ -3,7 +3,6 @@ package dhcp4
 
 import (
 	"bytes"
-	"crypto/rand"
 	"encoding/binary"
 	"fmt"
 	"log"
@@ -36,7 +35,7 @@ type Client struct {
 	hardwareAddr net.HardwareAddr
 	cfg          Config
 	timeNow      func() time.Time
-	randRead     func([]byte) (int, error)
+	generateXID  func([]byte)
 
 	// last DHCPACK packet for renewal/release
 	ack dhcp4.Packet
@@ -47,9 +46,6 @@ func (c *Client) ObtainOrRenew() bool {
 	c.once.Do(func() {
 		if c.timeNow == nil {
 			c.timeNow = time.Now
-		}
-		if c.randRead == nil {
-			c.randRead = rand.Read
 		}
 		if c.connection == nil && c.Interface != nil {
 			pktsock, err := dhcp4client.NewPacketSock(c.Interface.Index)
@@ -71,14 +67,15 @@ func (c *Client) ObtainOrRenew() bool {
 			dhcp4client.Timeout(5*time.Second),
 			dhcp4client.Broadcast(false),
 			dhcp4client.Connection(c.connection),
+			dhcp4client.GenerateXID(c.generateXID),
 		)
 		if err != nil {
 			c.err = err
 			return
 		}
-		dhcp.RandRead = c.randRead
 		c.dhcp = dhcp
 	})
+	c.err = nil // clear previous error
 	// TODO: renew if c.ack != nil, fall back if renewal fails
 	ok, ack, err := c.dhcpRequest()
 	if err != nil {
