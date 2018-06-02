@@ -2,132 +2,25 @@ package integration_test
 
 import (
 	"bytes"
-	"fmt"
 	"io/ioutil"
 	"log"
 	"net"
 	"os"
 	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
 	"time"
 
-	"golang.org/x/sys/unix"
+	"router7/internal/dhcp4"
 
-	"github.com/d2g/dhcp4"
-	"github.com/d2g/dhcp4client"
+	"github.com/google/go-cmp/cmp"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
 	"github.com/google/gopacket/pcapgo"
 )
-
-var (
-	hardwareAddr net.HardwareAddr
-)
-
-func addHostname(p *dhcp4.Packet) {
-	var utsname unix.Utsname
-	if err := unix.Uname(&utsname); err != nil {
-		log.Fatal(err)
-	}
-	nnb := utsname.Nodename[:bytes.IndexByte(utsname.Nodename[:], 0)]
-	p.AddOption(dhcp4.OptionHostName, nnb)
-}
-
-func addClientId(p *dhcp4.Packet) {
-	id := make([]byte, len(hardwareAddr)+1)
-	id[0] = 1 // hardware type ethernet, https://tools.ietf.org/html/rfc1700
-	copy(id[1:], hardwareAddr)
-	p.AddOption(dhcp4.OptionClientIdentifier, id)
-}
-
-// dhcpRequest is a copy of (dhcp4client/Client).Request which
-// includes the hostname.
-func dhcpRequest(c *dhcp4client.Client) (bool, dhcp4.Packet, error) {
-	discoveryPacket := c.DiscoverPacket()
-	addHostname(&discoveryPacket)
-	addClientId(&discoveryPacket)
-	discoveryPacket.PadToMinSize()
-
-	if err := c.SendPacket(discoveryPacket); err != nil {
-		return false, discoveryPacket, err
-	}
-
-	offerPacket, err := c.GetOffer(&discoveryPacket)
-	if err != nil {
-		return false, offerPacket, err
-	}
-
-	requestPacket := c.RequestPacket(&offerPacket)
-	addHostname(&requestPacket)
-	addClientId(&requestPacket)
-	requestPacket.PadToMinSize()
-
-	if err := c.SendPacket(requestPacket); err != nil {
-		return false, requestPacket, err
-	}
-
-	acknowledgement, err := c.GetAcknowledgement(&requestPacket)
-	if err != nil {
-		return false, acknowledgement, err
-	}
-
-	acknowledgementOptions := acknowledgement.ParseOptions()
-	if dhcp4.MessageType(acknowledgementOptions[dhcp4.OptionDHCPMessageType][0]) != dhcp4.ACK {
-		return false, acknowledgement, nil
-	}
-
-	return true, acknowledgement, nil
-}
-
-type connection interface {
-	Close() error
-	Write(packet []byte) error
-	ReadFrom() ([]byte, net.IP, error)
-	SetReadTimeout(t time.Duration) error
-}
-type replayer struct {
-	underlying connection
-}
-
-func (r *replayer) Close() error                         { return r.underlying.Close() }
-func (r *replayer) Write(b []byte) error                 { return r.underlying.Write(b) }
-func (r *replayer) SetReadTimeout(t time.Duration) error { return r.underlying.SetReadTimeout(t) }
-
-func (r *replayer) ReadFrom() ([]byte, net.IP, error) {
-	d, ip, err := r.underlying.ReadFrom()
-	log.Printf("d = %+v, ip = %v, err = %v", d, ip, err)
-	return d, ip, err
-}
-
-func dhcp() error {
-	v0, err := net.InterfaceByName("veth0a")
-	if err != nil {
-		return err
-	}
-
-	hardwareAddr = v0.HardwareAddr
-
-	pktsock, err := dhcp4client.NewPacketSock(v0.Index)
-	if err != nil {
-		return err
-	}
-	dhcp, err := dhcp4client.New(
-		dhcp4client.HardwareAddr(v0.HardwareAddr),
-		dhcp4client.Timeout(5*time.Second),
-		dhcp4client.Broadcast(false),
-		dhcp4client.Connection(&replayer{underlying: pktsock}),
-	)
-	if err != nil {
-		return err
-	}
-
-	//ok, ack, err := dhcpRequest(dhcp)
-	fmt.Println(dhcpRequest(dhcp))
-	return nil
-}
 
 func TestDHCPv4(t *testing.T) {
 	const ns = "ns0" // name of the network namespace to use for this test
@@ -158,6 +51,7 @@ func TestDHCPv4(t *testing.T) {
 	ready.Close()                 // dnsmasq will re-create the file anyway
 	defer os.Remove(ready.Name()) // dnsmasq does not clean up its pid file
 
+	var stderr bytes.Buffer
 	dnsmasq := exec.Command("ip", "netns", "exec", ns, "dnsmasq",
 		"--keep-in-foreground", // cannot use --no-daemon because we need --pid-file
 		"--log-facility=-",     // log to stderr
@@ -171,7 +65,7 @@ func TestDHCPv4(t *testing.T) {
 		"--leasefile-ro",       // do not create a lease database
 	)
 	dnsmasq.Stdout = os.Stdout
-	dnsmasq.Stderr = os.Stderr
+	dnsmasq.Stderr = &stderr
 	if err := dnsmasq.Start(); err != nil {
 		t.Fatal(err)
 	}
@@ -229,9 +123,62 @@ func TestDHCPv4(t *testing.T) {
 	}()
 	// TODO: test the capture daemon
 
-	if err := dhcp(); err != nil {
+	iface, err := net.InterfaceByName("veth0a")
+	if err != nil {
 		t.Fatal(err)
 	}
+	c := dhcp4.Client{
+		Interface: iface,
+	}
+	if !c.ObtainOrRenew() {
+		t.Fatal(c.Err())
+	}
+	cfg := c.Config()
+	t.Logf("cfg = %+v", cfg)
+	if got, want := cfg.Router, "192.168.23.1"; got != want {
+		t.Errorf("config: unexpected router: got %q, want %q", got, want)
+	}
+
+	if err := c.Release(); err != nil {
+		t.Fatal(err)
+	}
+
+	// TODO: use inotify on the leases db to wait for this event
+	// TODO: alternatively, replace bytes.Buffer with a pipe and read from that
+	time.Sleep(100 * time.Millisecond) // give dnsmasq some time to process the DHCPRELEASE
+
+	// Kill dnsmasq to flush its log
+	done = true
+	dnsmasq.Process.Kill()
+
+	mac := iface.HardwareAddr.String()
+	lines := strings.Split(strings.TrimSpace(stderr.String()), "\n")
+	var dhcpActionRe = regexp.MustCompile(` (DHCP[^ ]*)`)
+	var actions []string
+	for _, line := range lines {
+		if !strings.HasPrefix(line, "dnsmasq-dhcp") {
+			continue
+		}
+		if !strings.Contains(line, mac) {
+			continue
+		}
+		matches := dhcpActionRe.FindStringSubmatch(line)
+		if matches == nil {
+			continue
+		}
+		actions = append(actions, matches[1])
+	}
+	want := []string{
+		"DHCPDISCOVER(veth0b)",
+		"DHCPOFFER(veth0b)",
+		"DHCPREQUEST(veth0b)",
+		"DHCPACK(veth0b)",
+		"DHCPRELEASE(veth0b)",
+	}
+	if diff := cmp.Diff(actions, want); diff != "" {
+		t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-got +want):\n%s", diff)
+	}
+
 	time.Sleep(1 * time.Second)
 	handle.Close()
 	<-closed
