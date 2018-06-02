@@ -55,6 +55,7 @@ func logic() error {
 		case <-time.After(time.Until(c.Config().RenewAfter)):
 			// fallthrough and renew the DHCP lease
 		case <-usr2:
+			log.Printf("SIGUSR2 received, sending DHCPRELEASE")
 			if err := c.Release(); err != nil {
 				return err
 			}
