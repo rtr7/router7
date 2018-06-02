@@ -37,6 +37,9 @@ func subnetMaskSize(mask string) (int, error) {
 func applyDhcp4(iface, dir string) error {
 	b, err := ioutil.ReadFile(filepath.Join(dir, "dhcp4/wire/lease.json"))
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // dhcp4 might not have obtained a lease yet
+		}
 		return err
 	}
 	var got dhcp4.Config
@@ -105,6 +108,9 @@ func applyDhcp4(iface, dir string) error {
 func applyDhcp6(iface, dir string) error {
 	b, err := ioutil.ReadFile(filepath.Join(dir, "dhcp6/wire/lease.json"))
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil // dhcp6 might not have obtained a lease yet
+		}
 		return err
 	}
 	var got dhcp6.Config
