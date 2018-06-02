@@ -5,9 +5,11 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"strconv"
 	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv6"
+	"github.com/insomniacslk/dhcp/iana"
 )
 
 type ClientConfig struct {
@@ -20,6 +22,14 @@ type ClientConfig struct {
 	// RemoteAddr allows addressing a specific DHCPv6 server. It defaults to
 	// the dhcpv6.AllDHCPRelayAgentsAndServers multicast address.
 	RemoteAddr *net.UDPAddr
+
+	// DUID contains all bytes (including the prefixing uint16 type field) for a
+	// DHCP Unique Identifier (e.g. []byte{0x00, 0x0a, 0x00, 0x03, 0x00, 0x01,
+	// 0x4c, 0x5e, 0xc, 0x41, 0xbf, 0x39}).
+	//
+	// Fiber7 assigns static IPv6 /48 networks to DUIDs, so it is important to
+	// be able to carry it around between devices.
+	DUID []byte
 
 	Conn           net.PacketConn // for testing
 	TransactionIDs []uint32       // for testing
@@ -36,6 +46,7 @@ type Client struct {
 	interfaceName string
 	raddr         *net.UDPAddr
 	timeNow       func() time.Time
+	duid          *dhcpv6.Duid
 
 	cfg Config
 	err error
@@ -82,6 +93,28 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		}
 	}
 
+	var duid *dhcpv6.Duid
+	if cfg.DUID != nil {
+		var err error
+		duid, err = dhcpv6.DuidFromBytes(cfg.DUID)
+		if err != nil {
+			return nil, err
+		}
+		fmt.Printf("duid: %T, %v, %#v", duid, duid, duid)
+	} else {
+		iface, err := net.InterfaceByName(cfg.InterfaceName)
+		if err != nil {
+			return nil, err
+		}
+
+		duid = &dhcpv6.Duid{
+			Type:          dhcpv6.DUID_LLT,
+			HwType:        iana.HwTypeEthernet,
+			Time:          dhcpv6.GetTime(),
+			LinkLayerAddr: iface.HardwareAddr,
+		}
+	}
+
 	// prepare the socket to listen on for replies
 	conn := cfg.Conn
 	if conn == nil {
@@ -97,6 +130,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		timeNow:        time.Now,
 		raddr:          raddr,
 		Conn:           conn,
+		duid:           duid,
 		transactionIDs: cfg.TransactionIDs,
 		ReadTimeout:    dhcpv6.DefaultReadTimeout,
 		WriteTimeout:   dhcpv6.DefaultWriteTimeout,
@@ -177,7 +211,7 @@ func (c *Client) sendReceive(packet dhcpv6.DHCPv6, expectedType dhcpv6.MessageTy
 func (c *Client) solicit(solicit dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6, error) {
 	var err error
 	if solicit == nil {
-		solicit, err = dhcpv6.NewSolicitForInterface(c.interfaceName)
+		solicit, err = dhcpv6.NewSolicitForInterface(c.interfaceName, dhcpv6.WithClientID(*c.duid))
 		if err != nil {
 			return nil, nil, err
 		}
@@ -194,7 +228,7 @@ func (c *Client) solicit(solicit dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6, e
 func (c *Client) request(advertise, request dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6, error) {
 	if request == nil {
 		var err error
-		request, err = dhcpv6.NewRequestFromAdvertise(advertise)
+		request, err = dhcpv6.NewRequestFromAdvertise(advertise, dhcpv6.WithClientID(*c.duid))
 		if err != nil {
 			return nil, nil, err
 		}
