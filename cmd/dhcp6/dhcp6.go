@@ -5,16 +5,18 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"router7/internal/dhcp6"
 	"router7/internal/notify"
+	"router7/internal/teelogger"
 	"syscall"
 	"time"
 )
+
+var log = teelogger.NewConsole()
 
 func logic() error {
 	const configPath = "/perm/dhcp6/wire/lease.json"
@@ -22,20 +24,26 @@ func logic() error {
 		return err
 	}
 
+	duid, err := ioutil.ReadFile("/perm/dhcp6/duid")
+	if err != nil {
+		log.Printf("could not read /perm/dhcp6/duid (%v), proceeding with DUID-LLT")
+	}
+
 	c, err := dhcp6.NewClient(dhcp6.ClientConfig{
 		InterfaceName: "uplink0",
+		DUID:          duid,
 	})
 	if err != nil {
 		return err
 	}
+	usr2 := make(chan os.Signal, 1)
+	signal.Notify(usr2, syscall.SIGUSR2)
 	for c.ObtainOrRenew() {
 		if err := c.Err(); err != nil {
 			log.Printf("Temporary error: %v", err)
 			continue
 		}
-		// TODO: use a logger which writes to /dev/console
 		log.Printf("lease: %+v", c.Config())
-		ioutil.WriteFile("/dev/console", []byte(fmt.Sprintf("lease: %+v\n", c.Config())), 0600)
 		b, err := json.Marshal(c.Config())
 		if err != nil {
 			return err
@@ -45,9 +53,17 @@ func logic() error {
 		}
 		if err := notify.Process("/user/netconfi", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying netconfig: %v", err)
-			ioutil.WriteFile("/dev/console", []byte(fmt.Sprintf("notifying netconfigd: %+v\n", err)), 0600)
 		}
-		time.Sleep(time.Until(c.Config().RenewAfter))
+		select {
+		case <-time.After(time.Until(c.Config().RenewAfter)):
+			// fallthrough and renew the DHCP lease
+		case <-usr2:
+			log.Printf("SIGUSR2 received, sending DHCPRELEASE")
+			if _, _, err := c.Release(); err != nil {
+				return err
+			}
+			os.Exit(125) // quit supervision by gokrazy
+		}
 	}
 	return c.Err() // permanent error
 }

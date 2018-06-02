@@ -47,6 +47,7 @@ type Client struct {
 	raddr         *net.UDPAddr
 	timeNow       func() time.Time
 	duid          *dhcpv6.Duid
+	advertise     dhcpv6.DHCPv6
 
 	cfg Config
 	err error
@@ -249,7 +250,8 @@ func (c *Client) ObtainOrRenew() bool {
 		return true
 	}
 
-	_, reply, err := c.request(advertise, nil)
+	c.advertise = advertise
+	_, reply, err := c.request(advertise)
 	if err != nil {
 		c.err = err
 		return true
@@ -289,6 +291,22 @@ func (c *Client) ObtainOrRenew() bool {
 	}
 	c.cfg = newCfg
 	return true
+}
+
+func (c *Client) Release() (release dhcpv6.DHCPv6, reply dhcpv6.DHCPv6, err error) {
+	release, err = dhcpv6.NewRequestFromAdvertise(c.advertise, dhcpv6.WithClientID(*c.duid))
+	if err != nil {
+		return nil, nil, err
+	}
+	release.(*dhcpv6.DHCPv6Message).SetMessage(dhcpv6.RELEASE)
+
+	if len(c.transactionIDs) > 0 {
+		id := c.transactionIDs[0]
+		c.transactionIDs = c.transactionIDs[1:]
+		release.(*dhcpv6.DHCPv6Message).SetTransactionID(id)
+	}
+	reply, err = c.sendReceive(release, dhcpv6.MSGTYPE_NONE)
+	return release, reply, err
 }
 
 func (c *Client) Err() error {

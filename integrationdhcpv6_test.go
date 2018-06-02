@@ -99,13 +99,17 @@ func TestDHCPv6(t *testing.T) {
 		t.Fatalf("unexpected config: diff (-got +want):\n%s", diff)
 	}
 
+	c.Release()
+
 	{
+		dnsmasq.Kill() // flush log
 		got := dnsmasq.Actions()
 		want := []string{
 			"DHCPSOLICIT(veth0b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
 			"DHCPADVERTISE(veth0b) 2001:db8::c 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
 			"DHCPREQUEST(veth0b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
 			"DHCPREPLY(veth0b) 2001:db8::c 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
+			"DHCPRELEASE(veth0b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
 		}
 		withoutMac := func(line string) string {
 			return v6AddrRe.ReplaceAllString(strings.TrimSpace(line), "")
