@@ -37,6 +37,7 @@ func logic() error {
 	for c.ObtainOrRenew() {
 		if err := c.Err(); err != nil {
 			log.Printf("Temporary error: %v", err)
+			time.Sleep(1 * time.Second)
 			continue
 		}
 		log.Printf("lease: %+v", c.Config())
