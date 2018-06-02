@@ -243,21 +243,30 @@ func Apply(iface, dir string) error {
 		return err
 	}
 
+	var firstErr error
+
 	if err := applyDhcp4(iface, dir); err != nil {
-		return err
+		log.Printf("cannot apply dhcp4 lease: %v", err)
+		firstErr = err
 	}
 
 	if err := applyDhcp6(iface, dir); err != nil {
-		return err
+		log.Printf("cannot apply dhcp6 lease: %v", err)
+		if firstErr == nil {
+			firstErr = err
+		}
 	}
 
 	if err := applySysctl(); err != nil {
-		return err
+		log.Printf("cannot apply sysctl config: %v", err)
+		if firstErr == nil {
+			firstErr = err
+		}
 	}
 
 	if err := applyFirewall(); err != nil {
 		return err
 	}
 
-	return nil
+	return firstErr
 }
