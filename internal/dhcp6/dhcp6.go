@@ -50,6 +50,11 @@ type Client struct {
 }
 
 func NewClient(cfg ClientConfig) (*Client, error) {
+	iface, err := net.InterfaceByName(cfg.InterfaceName)
+	if err != nil {
+		return nil, err
+	}
+
 	// if no LocalAddr is specified, get the interface's link-local address
 	laddr := cfg.LocalAddr
 	if laddr == nil {
@@ -60,7 +65,11 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		laddr = &net.UDPAddr{
 			IP:   *llAddr,
 			Port: dhcpv6.DefaultClientPort,
-			Zone: cfg.InterfaceName,
+			// HACK: Zone should ideally be cfg.InterfaceName, but Go’s
+			// ipv6ZoneCache is only updated every 60s, so the addition of the
+			// veth interface will not be picked up for all tests after the
+			// first test.
+			Zone: strconv.Itoa(iface.Index),
 		}
 	}
 
