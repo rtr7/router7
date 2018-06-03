@@ -19,6 +19,11 @@ const goldenInterfaces = `
     {
       "hardware_addr": "02:73:53:00:ca:fe",
       "name": "uplink0"
+    },
+    {
+      "hardware_addr": "02:73:53:00:b0:0c",
+      "name": "lan0",
+      "addr": "192.168.42.1/24"
     }
   ]
 }
@@ -73,8 +78,20 @@ func TestNetconfig(t *testing.T) {
 			}
 		}
 
-		if err := netconfig.Apply(tmp); err != nil {
+		if err := os.MkdirAll(filepath.Join(tmp, "root", "etc"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
 			t.Fatalf("netconfig.Apply: %v", err)
+		}
+
+		b, err := ioutil.ReadFile(filepath.Join(tmp, "root", "etc", "resolv.conf"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if got, want := strings.TrimSpace(string(b)), "nameserver 192.168.42.1"; got != want {
+			t.Errorf("/etc/resolv.conf: got %q, want %q", got, want)
 		}
 
 		return
@@ -90,6 +107,7 @@ func TestNetconfig(t *testing.T) {
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "dummy0", "type", "dummy"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "lan0", "type", "dummy"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "dummy0", "address", "02:73:53:00:ca:fe"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "lan0", "address", "02:73:53:00:b0:0c"),
 	}
 
 	for _, cmd := range nsSetup {

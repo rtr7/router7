@@ -21,7 +21,7 @@ func logic() error {
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
 	for {
-		err := netconfig.Apply("/perm/")
+		err := netconfig.Apply("/perm/", "/")
 		// Notify gokrazy about new addresses (netconfig.Apply might have
 		// modified state before returning an error) so that listeners can be
 		// updated.

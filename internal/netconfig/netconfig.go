@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net"
 	"os"
 	"path/filepath"
@@ -16,7 +15,10 @@ import (
 
 	"router7/internal/dhcp4"
 	"router7/internal/dhcp6"
+	"router7/internal/teelogger"
 )
+
+var log = teelogger.NewConsole()
 
 func subnetMaskSize(mask string) (int, error) {
 	parts := strings.Split(mask, ".")
@@ -154,7 +156,7 @@ type InterfaceConfig struct {
 	Interfaces []InterfaceDetails `json:"interfaces"`
 }
 
-func applyInterfaces(dir string) error {
+func applyInterfaces(dir, root string) error {
 	b, err := ioutil.ReadFile(filepath.Join(dir, "interfaces.json"))
 	if err != nil {
 		return err
@@ -180,11 +182,9 @@ func applyInterfaces(dir string) error {
 				continue // not a configurable interface (e.g. sit0)
 			}
 			log.Printf("no config for hardwareattr %s", addr)
-			ioutil.WriteFile("/dev/console", []byte(fmt.Sprintf("no config for hardwareattr %s\n", addr)), 0600)
 			continue
 		}
 		log.Printf("apply details %+v", details)
-		ioutil.WriteFile("/dev/console", []byte(fmt.Sprintf("apply %+v\n", details)), 0600)
 		if attr.Name != details.Name {
 			if err := netlink.LinkSetName(l, details.Name); err != nil {
 				return fmt.Errorf("LinkSetName(%q): %v", details.Name, err)
@@ -207,6 +207,17 @@ func applyInterfaces(dir string) error {
 
 			if err := netlink.AddrReplace(l, addr); err != nil {
 				return fmt.Errorf("AddrReplace(%s, %v): %v", attr.Name, addr, err)
+			}
+
+			if details.Name == "lan0" {
+				b := []byte("nameserver " + addr.IP.String() + "\n")
+				fn := filepath.Join(root, "etc", "resolv.conf")
+				if err := os.Remove(fn); err != nil && !os.IsNotExist(err) {
+					return err
+				}
+				if err := ioutil.WriteFile(fn, b, 0644); err != nil {
+					return err
+				}
 			}
 		}
 	}
@@ -254,10 +265,10 @@ func applySysctl() error {
 	return nil
 }
 
-func Apply(dir string) error {
+func Apply(dir, root string) error {
 
 	// TODO: split into two parts: delay the up until later
-	if err := applyInterfaces(dir); err != nil {
+	if err := applyInterfaces(dir, root); err != nil {
 		return fmt.Errorf("interfaces: %v", err)
 	}
 
