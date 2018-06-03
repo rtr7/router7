@@ -18,7 +18,7 @@ const goldenInterfaces = `
   "interfaces":[
     {
       "hardware_addr": "02:73:53:00:ca:fe",
-      "name": "dummy23"
+      "name": "uplink0"
     }
   ]
 }
@@ -73,7 +73,7 @@ func TestNetconfig(t *testing.T) {
 			}
 		}
 
-		if err := netconfig.Apply("dummy23", tmp); err != nil {
+		if err := netconfig.Apply(tmp); err != nil {
 			t.Fatalf("netconfig.Apply: %v", err)
 		}
 
@@ -88,7 +88,7 @@ func TestNetconfig(t *testing.T) {
 
 	nsSetup := []*exec.Cmd{
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "dummy0", "type", "dummy"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "uplink0", "type", "dummy"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "lan0", "type", "dummy"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "dummy0", "address", "02:73:53:00:ca:fe"),
 	}
 
@@ -106,18 +106,23 @@ func TestNetconfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	addrs, err := exec.Command("ip", "netns", "exec", ns, "ip", "address", "show", "dev", "dummy23").Output()
+	addrs, err := exec.Command("ip", "netns", "exec", ns, "ip", "address", "show", "dev", "uplink0").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	addrRe := regexp.MustCompile(`(?m)^\s*inet 85.195.207.62/25 brd 85.195.207.127 scope global dummy23$`)
+	addrRe := regexp.MustCompile(`(?m)^\s*inet 85.195.207.62/25 brd 85.195.207.127 scope global uplink0$`)
 	if !addrRe.MatchString(string(addrs)) {
 		t.Fatalf("regexp %s does not match %s", addrRe, string(addrs))
 	}
+
+	addrsLan, err := exec.Command("ip", "netns", "exec", ns, "ip", "address", "show", "dev", "lan0").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
 	addr6Re := regexp.MustCompile(`(?m)^\s*inet6 2a02:168:4a00::1/64 scope global\s*$`)
-	if !addr6Re.MatchString(string(addrs)) {
-		t.Fatalf("regexp %s does not match %s", addr6Re, string(addrs))
+	if !addr6Re.MatchString(string(addrsLan)) {
+		t.Fatalf("regexp %s does not match %s", addr6Re, string(addrsLan))
 	}
 
 	wantRoutes := []string{
@@ -126,7 +131,7 @@ func TestNetconfig(t *testing.T) {
 		"85.195.207.1 proto dhcp scope link src 85.195.207.62",
 	}
 
-	out, err := exec.Command("ip", "netns", "exec", ns, "ip", "route", "show", "dev", "dummy23").Output()
+	out, err := exec.Command("ip", "netns", "exec", ns, "ip", "route", "show", "dev", "uplink0").Output()
 	if err != nil {
 		t.Fatal(err)
 	}

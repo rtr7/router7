@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"log"
 	"net"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -34,7 +35,7 @@ func subnetMaskSize(mask string) (int, error) {
 	return ones, nil
 }
 
-func applyDhcp4(iface, dir string) error {
+func applyDhcp4(dir string) error {
 	b, err := ioutil.ReadFile(filepath.Join(dir, "dhcp4/wire/lease.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -47,7 +48,7 @@ func applyDhcp4(iface, dir string) error {
 		return err
 	}
 
-	link, err := netlink.LinkByName(iface)
+	link, err := netlink.LinkByName("uplink0")
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func applyDhcp4(iface, dir string) error {
 	return nil
 }
 
-func applyDhcp6(iface, dir string) error {
+func applyDhcp6(dir string) error {
 	b, err := ioutil.ReadFile(filepath.Join(dir, "dhcp6/wire/lease.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -118,7 +119,7 @@ func applyDhcp6(iface, dir string) error {
 		return err
 	}
 
-	link, err := netlink.LinkByName(iface)
+	link, err := netlink.LinkByName("lan0")
 	if err != nil {
 		return err
 	}
@@ -169,8 +170,17 @@ func applyInterfaces(dir string) error {
 	links, err := netlink.LinkList()
 	for _, l := range links {
 		attr := l.Attrs()
-		details, ok := byHardwareAddr[attr.HardwareAddr.String()]
+		// TODO: prefix log line with details about the interface.
+		// link &{LinkAttrs:{Index:2 MTU:1500 TxQLen:1000 Name:eth0 HardwareAddr:00:0d:b9:49:70:18 Flags:broadcast|multicast RawFlags:4098 ParentIndex:0 MasterIndex:0 Namespace:<nil> Alias: Statistics:0xc4200f45f8 Promisc:0 Xdp:0xc4200ca180 EncapType:ether Protinfo:<nil> OperState:down NetNsID:0 NumTxQueues:0 NumRxQueues:0 Vfs:[]}}, attr &{Index:2 MTU:1500 TxQLen:1000 Name:eth0 HardwareAddr:00:0d:b9:49:70:18 Flags:broadcast|multicast RawFlags:4098 ParentIndex:0 MasterIndex:0 Namespace:<nil> Alias: Statistics:0xc4200f45f8 Promisc:0 Xdp:0xc4200ca180 EncapType:ether Protinfo:<nil> OperState:down NetNsID:0 NumTxQueues:0 NumRxQueues:0 Vfs:[]}
+
+		addr := attr.HardwareAddr.String()
+		details, ok := byHardwareAddr[addr]
 		if !ok {
+			if addr == "" {
+				continue // not a configurable interface (e.g. sit0)
+			}
+			log.Printf("no config for hardwareattr %s", addr)
+			ioutil.WriteFile("/dev/console", []byte(fmt.Sprintf("no config for hardwareattr %s\n", addr)), 0600)
 			continue
 		}
 		log.Printf("apply details %+v", details)
@@ -227,6 +237,8 @@ func applyFirewall() error {
 }
 
 func applySysctl() error {
+	// TODO: increase NAT table size
+	// TODO: increase keepalive to 7200(?)
 	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1"), 0644); err != nil {
 		return fmt.Errorf("sysctl(net.ipv4.ip_forward=1): %v", err)
 	}
@@ -242,36 +254,36 @@ func applySysctl() error {
 	return nil
 }
 
-func Apply(iface, dir string) error {
+func Apply(dir string) error {
 
 	// TODO: split into two parts: delay the up until later
 	if err := applyInterfaces(dir); err != nil {
-		return err
+		return fmt.Errorf("interfaces: %v", err)
 	}
 
 	var firstErr error
 
-	if err := applyDhcp4(iface, dir); err != nil {
+	if err := applyDhcp4(dir); err != nil {
 		log.Printf("cannot apply dhcp4 lease: %v", err)
-		firstErr = err
+		firstErr = fmt.Errorf("dhcp4: %v", err)
 	}
 
-	if err := applyDhcp6(iface, dir); err != nil {
+	if err := applyDhcp6(dir); err != nil {
 		log.Printf("cannot apply dhcp6 lease: %v", err)
 		if firstErr == nil {
-			firstErr = err
+			firstErr = fmt.Errorf("dhcp6: %v", err)
 		}
 	}
 
 	if err := applySysctl(); err != nil {
 		log.Printf("cannot apply sysctl config: %v", err)
 		if firstErr == nil {
-			firstErr = err
+			firstErr = fmt.Errorf("sysctl: %v", err)
 		}
 	}
 
 	if err := applyFirewall(); err != nil {
-		return err
+		return fmt.Errorf("firewall: %v", err)
 	}
 
 	return firstErr
