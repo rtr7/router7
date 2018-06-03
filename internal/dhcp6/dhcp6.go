@@ -222,18 +222,26 @@ func (c *Client) solicit(solicit dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6, e
 		c.transactionIDs = c.transactionIDs[1:]
 		solicit.(*dhcpv6.DHCPv6Message).SetTransactionID(id)
 	}
+	iapd := []byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
+	opt, err := dhcpv6.ParseOptIAForPrefixDelegation(iapd)
+	if err != nil {
+		return nil, nil, err
+	}
+	solicit.AddOption(opt)
 	advertise, err := c.sendReceive(solicit, dhcpv6.MSGTYPE_NONE)
 	return solicit, advertise, err
 }
 
-func (c *Client) request(advertise, request dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6, error) {
-	if request == nil {
-		var err error
-		request, err = dhcpv6.NewRequestFromAdvertise(advertise, dhcpv6.WithClientID(*c.duid))
-		if err != nil {
-			return nil, nil, err
-		}
+func (c *Client) request(advertise dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6, error) {
+
+	request, err := dhcpv6.NewRequestFromAdvertise(advertise, dhcpv6.WithClientID(*c.duid))
+	if err != nil {
+		return nil, nil, err
 	}
+	if iapd := advertise.GetOneOption(dhcpv6.OPTION_IA_PD); iapd != nil {
+		request.AddOption(iapd)
+	}
+
 	if len(c.transactionIDs) > 0 {
 		id := c.transactionIDs[0]
 		c.transactionIDs = c.transactionIDs[1:]
