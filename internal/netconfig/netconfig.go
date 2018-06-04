@@ -147,9 +147,10 @@ func applyDhcp6(dir string) error {
 }
 
 type InterfaceDetails struct {
-	HardwareAddr string `json:"hardware_addr"` // e.g. dc:9b:9c:ee:72:fd
-	Name         string `json:"name"`          // e.g. uplink0, or lan0
-	Addr         string `json:"addr"`          // e.g. 192.168.42.1/24
+	HardwareAddr      string `json:"hardware_addr"`       // e.g. dc:9b:9c:ee:72:fd
+	SpoofHardwareAddr string `json:"spoof_hardware_addr"` // e.g. dc:9b:9c:ee:72:fd
+	Name              string `json:"name"`                // e.g. uplink0, or lan0
+	Addr              string `json:"addr"`                // e.g. 192.168.42.1/24
 }
 
 type InterfaceConfig struct {
@@ -190,6 +191,9 @@ func applyInterfaces(dir, root string) error {
 	byHardwareAddr := make(map[string]InterfaceDetails)
 	for _, details := range cfg.Interfaces {
 		byHardwareAddr[details.HardwareAddr] = details
+		if spoof := details.SpoofHardwareAddr; spoof != "" {
+			byHardwareAddr[spoof] = details
+		}
 	}
 	links, err := netlink.LinkList()
 	for _, l := range links {
@@ -212,6 +216,16 @@ func applyInterfaces(dir, root string) error {
 				return fmt.Errorf("LinkSetName(%q): %v", details.Name, err)
 			}
 			attr.Name = details.Name
+		}
+
+		if spoof := details.SpoofHardwareAddr; spoof != "" {
+			hwaddr, err := net.ParseMAC(spoof)
+			if err != nil {
+				return fmt.Errorf("ParseMAC(%q): %v", spoof, err)
+			}
+			if err := netlink.LinkSetHardwareAddr(l, hwaddr); err != nil {
+				return fmt.Errorf("LinkSetHardwareAddr(%v): %v", hwaddr, err)
+			}
 		}
 
 		if attr.OperState != netlink.OperUp {

@@ -22,6 +22,7 @@ const goldenInterfaces = `
     },
     {
       "hardware_addr": "02:73:53:00:b0:0c",
+      "spoof_hardware_addr": "02:73:53:00:b0:aa",
       "name": "lan0",
       "addr": "192.168.42.1/24"
     }
@@ -122,6 +123,14 @@ func TestNetconfig(t *testing.T) {
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		t.Fatal(err)
+	}
+
+	link, err := exec.Command("ip", "netns", "exec", ns, "ip", "link", "show", "dev", "lan0").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(link), "link/ether 02:73:53:00:b0:aa") {
+		t.Errorf("lan0 MAC address is not 02:73:53:00:b0:aa")
 	}
 
 	addrs, err := exec.Command("ip", "netns", "exec", ns, "ip", "address", "show", "dev", "uplink0").Output()
