@@ -168,7 +168,7 @@ func TestNetconfig(t *testing.T) {
 		t.Fatalf("routes: diff (-got +want):\n%s", diff)
 	}
 
-	out, err = exec.Command("ip", "netns", "exec", ns, "iptables", "-t", "nat", "-L", "POSTROUTING", "-v").Output()
+	out, err = exec.Command("ip", "netns", "exec", ns, "nft", "list", "ruleset").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -177,10 +177,21 @@ func TestNetconfig(t *testing.T) {
 		t.Logf("rule %d: %s", n, rule)
 	}
 	if len(rules) < 3 {
-		t.Fatalf("iptables rules in nat table POSTROUTING not found")
+		t.Fatalf("nftables rules not found")
 	}
-	wantRule := "    0     0 MASQUERADE  all  --  any    uplink0  anywhere             anywhere"
-	if got, want := rules[2], wantRule; got != want {
-		t.Fatalf("unexpected iptables rule: got %q, want %q", got, want)
+	wantRules := []string{
+		`table ip nat {`,
+		`	chain prerouting {`,
+		`		type nat hook prerouting priority 0; policy accept;`,
+		`	}`,
+		``,
+		`	chain postrouting {`,
+		`		type nat hook postrouting priority 100; policy accept;`,
+		`		oif "uplink0" masquerade`,
+		`	}`,
+		`}`,
+	}
+	if diff := cmp.Diff(rules, wantRules); diff != "" {
+		t.Fatalf("unexpected nftables rules: diff (-got +want):\n%s", diff)
 	}
 }
