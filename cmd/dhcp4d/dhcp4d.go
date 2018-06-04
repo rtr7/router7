@@ -22,7 +22,10 @@ func logic() error {
 		return err
 	}
 	errs := make(chan error)
-	handler := dhcp4d.NewHandler()
+	handler, err := dhcp4d.NewHandler("/perm")
+	if err != nil {
+		return err
+	}
 	handler.Leases = func(leases []*dhcp4d.Lease) {
 		b, err := json.Marshal(leases)
 		if err != nil {

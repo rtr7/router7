@@ -7,6 +7,8 @@ import (
 	"net"
 	"time"
 
+	"router7/internal/netconfig"
+
 	"github.com/krolaw/dhcp4"
 )
 
@@ -31,14 +33,21 @@ type Handler struct {
 }
 
 // TODO: restore leases from permanent storage
-func NewHandler() *Handler {
-	serverIP := net.IP{192, 168, 42, 1} // TODO: customizeable
+func NewHandler(dir string) (*Handler, error) {
+	serverIP, err := netconfig.LinkAddress(dir, "lan0")
+	if err != nil {
+		return nil, err
+	}
+	serverIP = serverIP.To4()
+	start := make(net.IP, len(serverIP))
+	copy(start, serverIP)
+	start[len(start)-1] += 1
 	return &Handler{
 		leasesHW:    make(map[string]*Lease),
 		leasesIP:    make(map[int]*Lease),
 		serverIP:    serverIP,
-		start:       net.IP{192, 168, 42, 2},
-		leaseRange:  50,
+		start:       start,
+		leaseRange:  200,
 		leasePeriod: 2 * time.Hour,
 		options: dhcp4.Options{
 			dhcp4.OptionSubnetMask:       []byte{255, 255, 255, 0},
@@ -47,7 +56,7 @@ func NewHandler() *Handler {
 			dhcp4.OptionDomainName:       []byte("lan"),
 			dhcp4.OptionDomainSearch:     []byte{0x03, 'l', 'a', 'n', 0x00},
 		},
-	}
+	}, nil
 }
 
 func (h *Handler) findLease() int {
