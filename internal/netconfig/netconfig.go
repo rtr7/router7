@@ -11,8 +11,10 @@ import (
 	"strings"
 
 	"github.com/google/nftables"
+	"github.com/google/nftables/binaryutil"
 	"github.com/google/nftables/expr"
 	"github.com/vishvananda/netlink"
+	"golang.org/x/sys/unix"
 
 	"router7/internal/dhcp4"
 	"router7/internal/dhcp6"
@@ -261,13 +263,100 @@ func applyInterfaces(dir, root string) error {
 	return nil
 }
 
-func applyFirewall() error {
 func ifname(n string) []byte {
 	b := make([]byte, 16)
 	copy(b, []byte(n+"\x00"))
 	return b
 }
 
+func portForwardExpr(port uint16, dest net.IP, dport uint16) []expr.Any {
+	return []expr.Any{
+		// [ meta load iifname => reg 1 ]
+		&expr.Meta{Key: expr.MetaKeyIIFNAME, Register: 1},
+		// [ cmp eq reg 1 0x696c7075 0x00306b6e 0x00000000 0x00000000 ]
+		&expr.Cmp{
+			Op:       expr.CmpOpEq,
+			Register: 1,
+			Data:     ifname("uplink0"),
+		},
+
+		// [ meta load l4proto => reg 1 ]
+		&expr.Meta{Key: expr.MetaKeyL4PROTO, Register: 1},
+		// [ cmp eq reg 1 0x00000006 ]
+		&expr.Cmp{
+			Op:       expr.CmpOpEq,
+			Register: 1,
+			Data:     []byte{0x06}, /* TCP */
+		},
+
+		// [ payload load 2b @ transport header + 2 => reg 1 ]
+		&expr.Payload{
+			DestRegister: 1,
+			Base:         expr.PayloadBaseTransportHeader,
+			Offset:       2, // TODO
+			Len:          2, // TODO
+		},
+		// [ cmp eq reg 1 0x0000e60f ]
+		&expr.Cmp{
+			Op:       expr.CmpOpEq,
+			Register: 1,
+			Data:     binaryutil.BigEndian.PutUint16(port),
+		},
+
+		// [ immediate reg 1 0x0217a8c0 ]
+		&expr.Immediate{
+			Register: 1,
+			Data:     dest.To4(),
+		},
+		// [ immediate reg 2 0x0000f00f ]
+		&expr.Immediate{
+			Register: 2,
+			Data:     binaryutil.BigEndian.PutUint16(dport),
+		},
+		// [ nat dnat ip addr_min reg 1 addr_max reg 0 proto_min reg 2 proto_max reg 0 ]
+		&expr.NAT{
+			Type:        expr.NATTypeDestNAT,
+			Family:      unix.NFPROTO_IPV4,
+			RegAddrMin:  1,
+			RegProtoMin: 2,
+		},
+	}
+}
+
+type portForwarding struct {
+	Port     uint16 `json:"port"`      // e.g. 8080
+	DestAddr string `json:"dest_addr"` // e.g. 192.168.42.2
+	DestPort uint16 `json:"dest_port"` // e.g. 80
+}
+
+type portForwardings struct {
+	Forwardings []portForwarding `json:"forwardings"`
+}
+
+func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, prerouting *nftables.Chain) error {
+	b, err := ioutil.ReadFile(filepath.Join(dir, "portforwardings.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var cfg portForwardings
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return err
+	}
+
+	for _, fw := range cfg.Forwardings {
+		c.AddRule(&nftables.Rule{
+			Table: nat,
+			Chain: prerouting,
+			Exprs: portForwardExpr(fw.Port, net.ParseIP(fw.DestAddr), fw.DestPort),
+		})
+	}
+	return nil
+}
+
+func applyFirewall(dir string) error {
 	c := &nftables.Conn{}
 
 	// TODO: currently, each iteration adds a nftables.Rule — clear before?
@@ -277,7 +366,7 @@ func ifname(n string) []byte {
 		Name:   "nat",
 	})
 
-	c.AddChain(&nftables.Chain{
+	prerouting := c.AddChain(&nftables.Chain{
 		Name:     "prerouting",
 		Hooknum:  nftables.ChainHookPrerouting,
 		Priority: nftables.ChainPriorityFilter,
@@ -309,6 +398,10 @@ func ifname(n string) []byte {
 			&expr.Masq{},
 		},
 	})
+
+	if err := applyPortForwardings(dir, c, nat, prerouting); err != nil {
+		return err
+	}
 
 	return c.Flush()
 }
@@ -359,7 +452,7 @@ func Apply(dir, root string) error {
 		}
 	}
 
-	if err := applyFirewall(); err != nil {
+	if err := applyFirewall(dir); err != nil {
 		return fmt.Errorf("firewall: %v", err)
 	}
 

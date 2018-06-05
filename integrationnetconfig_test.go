@@ -30,6 +30,23 @@ const goldenInterfaces = `
 }
 `
 
+const goldenPortForwardings = `
+{
+  "forwardings":[
+    {
+      "port": 8080,
+      "dest_addr": "192.168.42.23",
+      "dest_port": 9999
+    },
+    {
+      "port": 8022,
+      "dest_addr": "192.168.42.99",
+      "dest_port": 22
+    }
+  ]
+}
+`
+
 const goldenDhcp4 = `
 {
   "valid_until":"2018-05-18T23:46:04.429895261+02:00",
@@ -70,6 +87,7 @@ func TestNetconfig(t *testing.T) {
 			{"dhcp4/wire/lease.json", goldenDhcp4},
 			{"dhcp6/wire/lease.json", goldenDhcp6},
 			{"interfaces.json", goldenInterfaces},
+			{"portforwardings.json", goldenPortForwardings},
 		} {
 			if err := os.MkdirAll(filepath.Join(tmp, filepath.Dir(golden.filename)), 0755); err != nil {
 				t.Fatal(err)
@@ -183,6 +201,8 @@ func TestNetconfig(t *testing.T) {
 		`table ip nat {`,
 		`	chain prerouting {`,
 		`		type nat hook prerouting priority 0; policy accept;`,
+		`		iifname "uplink0" tcp dport 8022 dnat to 192.168.42.99:ssh`,
+		`		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999`,
 		`	}`,
 		``,
 		`	chain postrouting {`,
