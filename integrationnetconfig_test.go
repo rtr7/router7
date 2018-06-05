@@ -176,7 +176,7 @@ func TestNetconfig(t *testing.T) {
 	for n, rule := range rules {
 		t.Logf("rule %d: %s", n, rule)
 	}
-	if len(rules) < 3 {
+	if len(rules) < 2 {
 		t.Fatalf("nftables rules not found")
 	}
 	wantRules := []string{
@@ -187,7 +187,7 @@ func TestNetconfig(t *testing.T) {
 		``,
 		`	chain postrouting {`,
 		`		type nat hook postrouting priority 100; policy accept;`,
-		`		oif "uplink0" masquerade`,
+		`		oifname "uplink0" masquerade`,
 		`	}`,
 		`}`,
 	}

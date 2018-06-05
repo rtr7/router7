@@ -262,6 +262,12 @@ func applyInterfaces(dir, root string) error {
 }
 
 func applyFirewall() error {
+func ifname(n string) []byte {
+	b := make([]byte, 16)
+	copy(b, []byte(n+"\x00"))
+	return b
+}
+
 	c := &nftables.Conn{}
 
 	// TODO: currently, each iteration adds a nftables.Rule — clear before?
@@ -287,22 +293,17 @@ func applyFirewall() error {
 		Type:     nftables.ChainTypeNAT,
 	})
 
-	iface, err := net.InterfaceByName("uplink0")
-	if err != nil {
-		return err
-	}
-
 	c.AddRule(&nftables.Rule{
 		Table: nat,
 		Chain: postrouting,
 		Exprs: []expr.Any{
-			// meta load oif => reg 1
-			&expr.Meta{Key: expr.MetaKeyOIF, Register: 1},
-			// cmp eq reg 1 0x00000003
+			// meta load oifname => reg 1
+			&expr.Meta{Key: expr.MetaKeyOIFNAME, Register: 1},
+			// cmp eq reg 1 0x696c7075 0x00306b6e 0x00000000 0x00000000
 			&expr.Cmp{
 				Op:       expr.CmpOpEq,
 				Register: 1,
-				Data:     uint32(iface.Index), // TODO: try using oifname instead of oif
+				Data:     ifname("uplink0"),
 			},
 			// masq
 			&expr.Masq{},
