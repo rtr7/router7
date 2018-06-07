@@ -80,3 +80,87 @@ func TestLease(t *testing.T) {
 		t.Fatalf("leased callback not called")
 	}
 }
+
+func TestPreferredAddress(t *testing.T) {
+	tmpdir, err := ioutil.TempDir("", "dhcp4dtest")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer os.RemoveAll(tmpdir)
+	if err := ioutil.WriteFile(filepath.Join(tmpdir, "interfaces.json"), []byte(goldenInterfaces), 0644); err != nil {
+		t.Fatal(err)
+	}
+	var (
+		addr         = net.IP{192, 168, 42, 23}
+		hardwareAddr = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+		hostname     = "xps"
+	)
+	handler, err := NewHandler(tmpdir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("no requested IP", func(t *testing.T) {
+		p := dhcp4.RequestPacket(
+			dhcp4.Discover,
+			hardwareAddr,                   // MAC address
+			net.IPv4zero,                   // requested IP address
+			[]byte{0xaa, 0xbb, 0xcc, 0xdd}, // transaction ID
+			false, // broadcast,
+			[]dhcp4.Option{
+				{
+					Code:  dhcp4.OptionHostName,
+					Value: []byte(hostname),
+				},
+			},
+		)
+		resp := handler.ServeDHCP(p, dhcp4.Discover, p.ParseOptions())
+		if got, want := resp.YIAddr().To4(), addr.To4(); bytes.Equal(got, want) {
+			t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("requested CIAddr", func(t *testing.T) {
+		p := dhcp4.RequestPacket(
+			dhcp4.Discover,
+			hardwareAddr, // MAC address
+			addr,         // requested IP address
+			[]byte{0xaa, 0xbb, 0xcc, 0xdd}, // transaction ID
+			false, // broadcast,
+			[]dhcp4.Option{
+				{
+					Code:  dhcp4.OptionHostName,
+					Value: []byte(hostname),
+				},
+			},
+		)
+		resp := handler.ServeDHCP(p, dhcp4.Discover, p.ParseOptions())
+		if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+			t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("requested option", func(t *testing.T) {
+		p := dhcp4.RequestPacket(
+			dhcp4.Discover,
+			hardwareAddr,                   // MAC address
+			net.IPv4zero,                   // requested IP address
+			[]byte{0xaa, 0xbb, 0xcc, 0xdd}, // transaction ID
+			false, // broadcast,
+			[]dhcp4.Option{
+				{
+					Code:  dhcp4.OptionHostName,
+					Value: []byte(hostname),
+				},
+				{
+					Code:  dhcp4.OptionRequestedIPAddress,
+					Value: addr,
+				},
+			},
+		)
+		resp := handler.ServeDHCP(p, dhcp4.Discover, p.ParseOptions())
+		if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+			t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
+		}
+	})
+}

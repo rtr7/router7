@@ -2,6 +2,7 @@
 package dhcp4d
 
 import (
+	"bytes"
 	"log"
 	"math/rand"
 	"net"
@@ -62,6 +63,7 @@ func NewHandler(dir string) (*Handler, error) {
 func (h *Handler) findLease() int {
 	if len(h.leasesIP) < h.leaseRange {
 		// Hand out a free lease
+		// TODO: hash the hwaddr like dnsmasq
 		i := rand.Intn(h.leaseRange)
 		if _, ok := h.leasesIP[i]; !ok {
 			return i
@@ -72,13 +74,35 @@ func (h *Handler) findLease() int {
 			}
 		}
 	}
-	// Re-use the oldest lease
+	// TODO: expire the oldest lease
 	return -1
+}
+
+func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
+	if len(reqIP) != 4 || reqIP.Equal(net.IPv4zero) {
+		return -1
+	}
+
+	leaseNum := dhcp4.IPRange(h.start, reqIP) - 1
+	if leaseNum < 0 || leaseNum >= h.leaseRange {
+		return -1
+	}
+
+	if l, exists := h.leasesIP[leaseNum]; exists && l.HardwareAddr != hwaddr {
+		return -1 // lease already in use
+	}
+
+	return leaseNum
 }
 
 // TODO: is ServeDHCP always run from the same goroutine, or do we need locking?
 func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options dhcp4.Options) dhcp4.Packet {
 	log.Printf("got DHCP packet: %+v, msgType: %v, options: %v", p, msgType, options)
+	reqIP := net.IP(options[dhcp4.OptionRequestedIPAddress])
+	if reqIP == nil {
+		reqIP = net.IP(p.CIAddr())
+	}
+
 	switch msgType {
 	case dhcp4.Discover:
 		// Find previous lease for this HardwareAddr, if any
@@ -86,11 +110,20 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		// if lease, ok := h.leases[hwAddr]; ok {
 
 		// }
-		free := h.findLease()
+
+		free := -1
+		if !bytes.Equal(reqIP.To4(), net.IPv4zero) {
+			free = h.canLease(reqIP, p.CHAddr().String())
+			log.Printf("canLease: %v", free)
+		}
+		if free == -1 {
+			free = h.findLease()
+		}
 		if free == -1 {
 			log.Printf("Cannot reply with DHCPOFFER: no more leases available")
 			return nil // no free leases
 		}
+
 		log.Printf("start = %v, free = %v", h.start, free)
 		return dhcp4.ReplyPacket(p,
 			dhcp4.Offer,
@@ -104,33 +137,16 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			return nil // message not for this dhcp server
 		}
 		nak := dhcp4.ReplyPacket(p, dhcp4.NAK, h.serverIP, nil, 0, nil)
-		reqIP := net.IP(options[dhcp4.OptionRequestedIPAddress])
-		if reqIP == nil {
-			reqIP = net.IP(p.CIAddr())
-		}
-
-		if len(reqIP) != 4 || reqIP.Equal(net.IPv4zero) {
+		leaseNum := h.canLease(reqIP, p.CHAddr().String())
+		if leaseNum == -1 {
 			return nak
-		}
-		leaseNum := dhcp4.IPRange(h.start, reqIP) - 1
-		if leaseNum < 0 || leaseNum >= h.leaseRange {
-			return nak
-		}
-
-		if l, exists := h.leasesIP[leaseNum]; exists && l.HardwareAddr != p.CHAddr().String() {
-			return nak // lease already in use
-		}
-
-		var hostname string
-		if b, ok := options[dhcp4.OptionHostName]; ok {
-			hostname = string(b)
 		}
 
 		lease := &Lease{
 			Addr:         reqIP,
 			HardwareAddr: p.CHAddr().String(),
 			Expiry:       time.Now().Add(h.leasePeriod),
-			Hostname:     hostname,
+			Hostname:     string(options[dhcp4.OptionHostName]),
 		}
 		h.leasesIP[leaseNum] = lease
 		h.leasesHW[lease.HardwareAddr] = lease
