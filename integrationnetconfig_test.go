@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"os"
 	"os/exec"
@@ -176,21 +177,19 @@ func TestNetconfig(t *testing.T) {
 		"85.195.207.1 proto dhcp scope link src 85.195.207.62",
 	}
 
-	out, err := exec.Command("ip", "netns", "exec", ns, "ip", "route", "show", "dev", "uplink0").Output()
+	routes, err := ipLines("netns", "exec", ns, "ip", "route", "show", "dev", "uplink0")
 	if err != nil {
 		t.Fatal(err)
 	}
-	routes := strings.Split(strings.TrimSpace(string(out)), "\n")
 
 	if diff := cmp.Diff(routes, wantRoutes); diff != "" {
 		t.Fatalf("routes: diff (-got +want):\n%s", diff)
 	}
 
-	out, err = exec.Command("ip", "netns", "exec", ns, "nft", "list", "ruleset").Output()
+	rules, err := ipLines("netns", "exec", ns, "nft", "list", "ruleset")
 	if err != nil {
 		t.Fatal(err)
 	}
-	rules := strings.Split(strings.TrimSpace(string(out)), "\n")
 	for n, rule := range rules {
 		t.Logf("rule %d: %s", n, rule)
 	}
@@ -211,7 +210,27 @@ func TestNetconfig(t *testing.T) {
 		`	}`,
 		`}`,
 	}
-	if diff := cmp.Diff(rules, wantRules); diff != "" {
+	opts := []cmp.Option{
+		cmp.Transformer("formatting", func(line string) string {
+			return strings.TrimSpace(strings.Replace(line, "dnat to", "dnat", -1))
+		}),
+	}
+
+	if diff := cmp.Diff(rules, wantRules, opts...); diff != "" {
 		t.Fatalf("unexpected nftables rules: diff (-got +want):\n%s", diff)
 	}
+}
+
+func ipLines(args ...string) ([]string, error) {
+	cmd := exec.Command("ip", args...)
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("%v: %v", cmd.Args, err)
+	}
+	outstr := string(out)
+	for strings.Contains(outstr, "  ") {
+		outstr = strings.Replace(outstr, "  ", " ", -1)
+	}
+
+	return strings.Split(strings.TrimSpace(outstr), "\n"), nil
 }
