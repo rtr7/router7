@@ -90,6 +90,9 @@ func TestDHCPv4(t *testing.T) {
 	if !c.ObtainOrRenew() {
 		t.Fatal(c.Err())
 	}
+	if err := c.Err(); err != nil {
+		t.Fatal(err)
+	}
 	cfg := c.Config()
 	t.Logf("cfg = %+v", cfg)
 	if got, want := cfg.Router, "192.168.23.1"; got != want {
