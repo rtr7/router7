@@ -153,6 +153,9 @@ func (o rdnss) Marshal() layers.ICMPv6Option {
 }
 
 func (s *Server) sendAdvertisement(addr net.Addr) error {
+	if s.prefixes == nil {
+		return nil // nothing to do
+	}
 	if addr == nil {
 		addr = &net.IPAddr{net.IPv6linklocalallnodes, s.iface.Name}
 	}
