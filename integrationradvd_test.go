@@ -30,6 +30,8 @@ func TestRouterAdvertisement(t *testing.T) {
 		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "192.168.23.1/24", "dev", "veth0b"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth0b", "up"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth0b"),
+
+		exec.Command("/bin/sh", "-c", "echo 1 > /proc/sys/net/ipv6/conf/veth0a/forwarding"),
 	}
 
 	for _, cmd := range nsSetup {
@@ -52,8 +54,12 @@ func TestRouterAdvertisement(t *testing.T) {
 	srv.SetPrefixes([]net.IPNet{
 		net.IPNet{IP: net.ParseIP("2a02:168:4a00::"), Mask: net.CIDRMask(64, 128)},
 	})
+	conn, err := net.ListenIP("ip6:ipv6-icmp", &net.IPAddr{net.IPv6unspecified, ""})
+	if err != nil {
+		t.Fatal(err)
+	}
 	go func() {
-		if err := srv.ListenAndServe("veth0a"); err != nil {
+		if err := srv.Serve("veth0a", conn); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -66,7 +72,7 @@ func TestRouterAdvertisement(t *testing.T) {
 	rdisc6.Stderr = os.Stderr
 	b, err := rdisc6.Output()
 	if err != nil {
-		t.Fatal(err)
+		t.Fatalf("%v: %v (output: %v)", rdisc6.Args, err, string(b))
 	}
 	t.Logf("b = %s", string(b))
 

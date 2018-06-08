@@ -36,20 +36,13 @@ func (s *Server) SetPrefixes(prefixes []net.IPNet) {
 	}
 }
 
-func (s *Server) ListenAndServe(ifname string) error {
+func (s *Server) Serve(ifname string, conn net.PacketConn) error {
 	var err error
 	s.iface, err = net.InterfaceByName(ifname)
 	if err != nil {
 		return err
 	}
 
-	// TODO(correctness): would it be better to listen on
-	// net.IPv6linklocalallrouters? Just specifying that results in an error,
-	// though.
-	conn, err := net.ListenIP("ip6:ipv6-icmp", &net.IPAddr{net.IPv6unspecified, ""})
-	if err != nil {
-		return err
-	}
 	defer conn.Close()
 	s.pc = ipv6.NewPacketConn(conn)
 	s.pc.SetHopLimit(255) // as per RFC 4861, section 4.1
@@ -87,6 +80,17 @@ func (s *Server) ListenAndServe(ifname string) error {
 	}
 
 	return nil
+}
+
+func (s *Server) ListenAndServe(ifname string) error {
+	// TODO(correctness): would it be better to listen on
+	// net.IPv6linklocalallrouters? Just specifying that results in an error,
+	// though.
+	conn, err := net.ListenIP("ip6:ipv6-icmp", &net.IPAddr{net.IPv6unspecified, ""})
+	if err != nil {
+		return err
+	}
+	return s.Serve(ifname, conn)
 }
 
 type sourceLinkLayerAddress struct {
