@@ -14,6 +14,7 @@ import (
 )
 
 type Lease struct {
+	Num          int
 	Addr         net.IP
 	HardwareAddr string
 	Hostname     string
@@ -28,6 +29,8 @@ type Handler struct {
 	options     dhcp4.Options
 	leasesHW    map[string]*Lease
 	leasesIP    map[int]*Lease
+
+	timeNow func() time.Time
 
 	// Leases is called whenever a new lease is handed out
 	Leases func([]*Lease)
@@ -57,24 +60,24 @@ func NewHandler(dir string) (*Handler, error) {
 			dhcp4.OptionDomainName:       []byte("lan"),
 			dhcp4.OptionDomainSearch:     []byte{0x03, 'l', 'a', 'n', 0x00},
 		},
+		timeNow: time.Now,
 	}, nil
 }
 
 func (h *Handler) findLease() int {
+	now := h.timeNow()
 	if len(h.leasesIP) < h.leaseRange {
-		// Hand out a free lease
 		// TODO: hash the hwaddr like dnsmasq
 		i := rand.Intn(h.leaseRange)
-		if _, ok := h.leasesIP[i]; !ok {
+		if l, ok := h.leasesIP[i]; !ok || now.After(l.Expiry) {
 			return i
 		}
 		for i := 0; i < h.leaseRange; i++ {
-			if _, ok := h.leasesIP[i]; !ok {
+			if l, ok := h.leasesIP[i]; !ok || now.After(l.Expiry) {
 				return i
 			}
 		}
 	}
-	// TODO: expire the oldest lease
 	return -1
 }
 
@@ -88,16 +91,24 @@ func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
 		return -1
 	}
 
-	if l, exists := h.leasesIP[leaseNum]; exists && l.HardwareAddr != hwaddr {
-		return -1 // lease already in use
+	l, ok := h.leasesIP[leaseNum]
+	if !ok {
+		return leaseNum // lease available
 	}
 
-	return leaseNum
+	if l.HardwareAddr == hwaddr {
+		return leaseNum // lease already owned by requestor
+	}
+
+	if h.timeNow().After(l.Expiry) {
+		return leaseNum // lease expired
+	}
+
+	return -1 // lease unavailable
 }
 
 // TODO: is ServeDHCP always run from the same goroutine, or do we need locking?
 func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options dhcp4.Options) dhcp4.Packet {
-	log.Printf("got DHCP packet: %+v, msgType: %v, options: %v", p, msgType, options)
 	reqIP := net.IP(options[dhcp4.OptionRequestedIPAddress])
 	if reqIP == nil {
 		reqIP = net.IP(p.CIAddr())
@@ -105,26 +116,28 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 
 	switch msgType {
 	case dhcp4.Discover:
-		// Find previous lease for this HardwareAddr, if any
-		// hwAddr := p.CHAddr().String()
-		// if lease, ok := h.leases[hwAddr]; ok {
-
-		// }
-
 		free := -1
+		hwAddr := p.CHAddr().String()
+
+		// try to offer the requested IP, if any and available
 		if !bytes.Equal(reqIP.To4(), net.IPv4zero) {
-			free = h.canLease(reqIP, p.CHAddr().String())
-			log.Printf("canLease: %v", free)
+			free = h.canLease(reqIP, hwAddr)
 		}
+
+		// offer previous lease for this HardwareAddr, if any
+		if lease, ok := h.leasesHW[hwAddr]; ok {
+			free = lease.Num
+		}
+
 		if free == -1 {
 			free = h.findLease()
 		}
+
 		if free == -1 {
 			log.Printf("Cannot reply with DHCPOFFER: no more leases available")
 			return nil // no free leases
 		}
 
-		log.Printf("start = %v, free = %v", h.start, free)
 		return dhcp4.ReplyPacket(p,
 			dhcp4.Offer,
 			h.serverIP,
@@ -143,11 +156,18 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		}
 
 		lease := &Lease{
+			Num:          leaseNum,
 			Addr:         reqIP,
 			HardwareAddr: p.CHAddr().String(),
 			Expiry:       time.Now().Add(h.leasePeriod),
 			Hostname:     string(options[dhcp4.OptionHostName]),
 		}
+
+		// Release any old leases for this client
+		if l, ok := h.leasesHW[lease.HardwareAddr]; ok {
+			delete(h.leasesIP, l.Num)
+		}
+
 		h.leasesIP[leaseNum] = lease
 		h.leasesHW[lease.HardwareAddr] = lease
 		if h.Leases != nil {
@@ -161,7 +181,5 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
 
 	}
-	//   1970/01/01 01:00:04 got DHCP packet: [1 1 6 0 142 216 238 39 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 164 76 200 233 19 71 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 99 130 83 99 53 1 3 54 4 192 168 42 1 50 4 192 168 42 33 12 3 120 112 115 55 18 1 28 2 3 15 6 119 12 44 47 26 121 42 121 249 33 252 42 255 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0], msgType: Request, options: map[OptionDHCPMessageType:[3] OptionServerIdentifier:[192 168 42 1] OptionHostName:[120 112 115] OptionParameterRequestList:[1 28 2 3 15 6 119 12 44 47 26 121 42 121 249 33 252 42] OptionRequestedIPAddress:[192 168 42 33]]
-
 	return nil
 }
