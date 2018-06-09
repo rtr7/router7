@@ -27,7 +27,7 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 		return err
 	}
 	var leases []*dhcp4d.Lease
-	if err := json.Unmarshal(b, leases); err != nil {
+	if err := json.Unmarshal(b, &leases); err != nil {
 		return err
 	}
 	h.SetLeases(leases)

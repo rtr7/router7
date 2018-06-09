@@ -21,6 +21,10 @@ type Lease struct {
 	Expiry       time.Time `json:"expiry"`
 }
 
+func (l *Lease) Expired(at time.Time) bool {
+	return !l.Expiry.IsZero() && at.After(l.Expiry)
+}
+
 type Handler struct {
 	serverIP    net.IP
 	start       net.IP // first IP address to hand out
@@ -80,11 +84,11 @@ func (h *Handler) findLease() int {
 	if len(h.leasesIP) < h.leaseRange {
 		// TODO: hash the hwaddr like dnsmasq
 		i := rand.Intn(h.leaseRange)
-		if l, ok := h.leasesIP[i]; !ok || now.After(l.Expiry) {
+		if l, ok := h.leasesIP[i]; !ok || l.Expired(now) {
 			return i
 		}
 		for i := 0; i < h.leaseRange; i++ {
-			if l, ok := h.leasesIP[i]; !ok || now.After(l.Expiry) {
+			if l, ok := h.leasesIP[i]; !ok || l.Expired(now) {
 				return i
 			}
 		}
@@ -111,7 +115,7 @@ func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
 		return leaseNum // lease already owned by requestor
 	}
 
-	if h.timeNow().After(l.Expiry) {
+	if l.Expired(h.timeNow()) {
 		return leaseNum // lease expired
 	}
 
@@ -174,8 +178,14 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			Hostname:     string(options[dhcp4.OptionHostName]),
 		}
 
-		// Release any old leases for this client
 		if l, ok := h.leasesHW[lease.HardwareAddr]; ok {
+			if l.Expiry.IsZero() {
+				// Retain permanent lease properties
+				lease.Expiry = time.Time{}
+				lease.Hostname = l.Hostname
+			}
+
+			// Release any old leases for this client
 			delete(h.leasesIP, l.Num)
 		}
 

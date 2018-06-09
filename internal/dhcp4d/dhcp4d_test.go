@@ -224,6 +224,43 @@ func TestPreviousLease(t *testing.T) {
 	}
 }
 
+func TestPermanentLease(t *testing.T) {
+	handler, cleanup := testHandler(t)
+	defer cleanup()
+	now := time.Now()
+	handler.timeNow = func() time.Time { return now }
+
+	var (
+		addr         = net.IP{192, 168, 42, 23}
+		hardwareAddr = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	)
+
+	handler.SetLeases([]*Lease{
+		{
+			Num:          2,
+			Addr:         addr,
+			HardwareAddr: hardwareAddr.String(),
+		},
+	})
+
+	p := request(addr, hardwareAddr)
+	resp := handler.ServeDHCP(p, dhcp4.Request, p.ParseOptions())
+	if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+		t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
+	}
+
+	now = now.Add(3 * time.Hour)
+
+	hardwareAddr[len(hardwareAddr)-1] = 0x77
+
+	p = request(addr, hardwareAddr)
+	resp = handler.ServeDHCP(p, dhcp4.Request, p.ParseOptions())
+	opts := resp.ParseOptions()
+	if got, want := dhcp4.MessageType(opts[dhcp4.OptionDHCPMessageType][0]), dhcp4.NAK; got != want {
+		t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
+	}
+}
+
 func TestExpiration(t *testing.T) {
 	handler, cleanup := testHandler(t)
 	defer cleanup()
