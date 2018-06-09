@@ -14,11 +14,11 @@ import (
 )
 
 type Lease struct {
-	Num          int
-	Addr         net.IP
-	HardwareAddr string
-	Hostname     string
-	Expiry       time.Time
+	Num          int       `json:"num"` // relative to Handler.start
+	Addr         net.IP    `json:"addr"`
+	HardwareAddr string    `json:"hardware_addr"`
+	Hostname     string    `json:"hostname"`
+	Expiry       time.Time `json:"expiry"`
 }
 
 type Handler struct {
@@ -36,7 +36,6 @@ type Handler struct {
 	Leases func([]*Lease)
 }
 
-// TODO: restore leases from permanent storage
 func NewHandler(dir string) (*Handler, error) {
 	serverIP, err := netconfig.LinkAddress(dir, "lan0")
 	if err != nil {
@@ -62,6 +61,18 @@ func NewHandler(dir string) (*Handler, error) {
 		},
 		timeNow: time.Now,
 	}, nil
+}
+
+// SetLeases overwrites the leases database with the specified leases, typically
+// loaded from persistent storage. There is no locking, so SetLeases must be
+// called before Serve.
+func (h *Handler) SetLeases(leases []*Lease) {
+	h.leasesHW = make(map[string]*Lease)
+	h.leasesIP = make(map[int]*Lease)
+	for _, l := range leases {
+		h.leasesHW[l.HardwareAddr] = l
+		h.leasesIP[l.Num] = l
+	}
 }
 
 func (h *Handler) findLease() int {

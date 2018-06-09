@@ -316,4 +316,26 @@ func TestServerID(t *testing.T) {
 	}
 }
 
-// TODO: test persistent storage
+func TestPersistentStorage(t *testing.T) {
+	handler, cleanup := testHandler(t)
+	defer cleanup()
+
+	var (
+		addr         = net.IP{192, 168, 42, 4}
+		hardwareAddr = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
+	)
+
+	handler.SetLeases([]*Lease{
+		{
+			Num:          2,
+			Addr:         addr,
+			HardwareAddr: hardwareAddr.String(),
+		},
+	})
+
+	p := request(net.IPv4zero, hardwareAddr)
+	resp := handler.ServeDHCP(p, dhcp4.Discover, p.ParseOptions())
+	if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+		t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
+	}
+}

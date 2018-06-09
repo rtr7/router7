@@ -4,18 +4,35 @@ package main
 import (
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
 	"syscall"
 
 	"router7/internal/dhcp4d"
 	"router7/internal/notify"
+	"router7/internal/teelogger"
 
 	"github.com/krolaw/dhcp4"
 	"github.com/krolaw/dhcp4/conn"
 )
+
+var log = teelogger.NewConsole()
+
+func loadLeases(h *dhcp4d.Handler, fn string) error {
+	b, err := ioutil.ReadFile(fn)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var leases []*dhcp4d.Lease
+	if err := json.Unmarshal(b, leases); err != nil {
+		return err
+	}
+	h.SetLeases(leases)
+	return nil
+}
 
 func logic() error {
 	if err := os.MkdirAll("/perm/dhcp4d", 0755); err != nil {
@@ -24,6 +41,9 @@ func logic() error {
 	errs := make(chan error)
 	handler, err := dhcp4d.NewHandler("/perm")
 	if err != nil {
+		return err
+	}
+	if err := loadLeases(handler, "/perm/dhcp4d/leases.json"); err != nil {
 		return err
 	}
 	handler.Leases = func(leases []*dhcp4d.Lease) {
@@ -38,7 +58,6 @@ func logic() error {
 		}
 		if err := notify.Process("/user/dnsd", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying dnsd: %v", err)
-			ioutil.WriteFile("/dev/console", []byte(fmt.Sprintf("notifying dnsd: %+v\n", err)), 0600)
 		}
 	}
 	conn, err := conn.NewUDP4BoundListener("lan0", ":67") // TODO: customizeable
