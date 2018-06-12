@@ -45,7 +45,8 @@ func (s *Server) Serve(ifname string, conn net.PacketConn) error {
 
 	defer conn.Close()
 	s.pc = ipv6.NewPacketConn(conn)
-	s.pc.SetHopLimit(255) // as per RFC 4861, section 4.1
+	s.pc.SetHopLimit(255)          // as per RFC 4861, section 4.1
+	s.pc.SetMulticastHopLimit(255) // as per RFC 4861, section 4.1
 
 	var filter ipv6.ICMPFilter
 	filter.SetAll(true)
