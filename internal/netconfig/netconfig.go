@@ -82,7 +82,7 @@ func applyDhcp4(dir string) error {
 		RTPROT_DHCP   = 16
 	)
 
-	if err := h.RouteAdd(&netlink.Route{
+	if err := h.RouteReplace(&netlink.Route{
 		LinkIndex: link.Attrs().Index,
 		Dst: &net.IPNet{
 			IP:   net.ParseIP(got.Router),
@@ -92,10 +92,10 @@ func applyDhcp4(dir string) error {
 		Scope:    netlink.SCOPE_LINK,
 		Protocol: RTPROT_DHCP,
 	}); err != nil {
-		return fmt.Errorf("RouteAdd(router): %v", err)
+		return fmt.Errorf("RouteReplace(router): %v", err)
 	}
 
-	if err := h.RouteAdd(&netlink.Route{
+	if err := h.RouteReplace(&netlink.Route{
 		LinkIndex: link.Attrs().Index,
 		Dst: &net.IPNet{
 			IP:   net.ParseIP("0.0.0.0"),
@@ -105,7 +105,7 @@ func applyDhcp4(dir string) error {
 		Src:      net.ParseIP(got.ClientIP),
 		Protocol: RTPROT_DHCP,
 	}); err != nil {
-		return fmt.Errorf("RouteAdd(default): %v", err)
+		return fmt.Errorf("RouteReplace(default): %v", err)
 	}
 
 	return nil
