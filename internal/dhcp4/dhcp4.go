@@ -175,6 +175,10 @@ func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
 	discoveryPacket := c.dhcp.DiscoverPacket()
 	c.addHostname(&discoveryPacket)
 	c.addClientId(&discoveryPacket)
+	if c.ack != nil {
+		discoveryPacket.SetYIAddr(c.ack.YIAddr())
+		discoveryPacket.AddOption(dhcp4.OptionRequestedIPAddress, (c.ack.YIAddr()).To4())
+	}
 	discoveryPacket.PadToMinSize()
 
 	if err := c.dhcp.SendPacket(discoveryPacket); err != nil {

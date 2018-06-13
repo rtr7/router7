@@ -26,6 +26,7 @@ func TestDHCPv4(t *testing.T) {
 	nsSetup := []*exec.Cmd{
 		exec.Command("ip", "link", "add", "veth0a", "type", "veth", "peer", "name", "veth0b", "netns", ns),
 		exec.Command("ip", "link", "set", "veth0a", "up"),
+		exec.Command("ip", "link", "set", "veth0a", "address", "02:73:53:00:ca:fe"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "192.168.23.1/24", "dev", "veth0b"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth0b", "up"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth0b"),
@@ -87,11 +88,13 @@ func TestDHCPv4(t *testing.T) {
 	c := dhcp4.Client{
 		Interface: iface,
 	}
-	if !c.ObtainOrRenew() {
-		t.Fatal(c.Err())
-	}
-	if err := c.Err(); err != nil {
-		t.Fatal(err)
+	for i := 0; i < 2; i++ {
+		if !c.ObtainOrRenew() {
+			t.Fatal(c.Err())
+		}
+		if err := c.Err(); err != nil {
+			t.Fatal(err)
+		}
 	}
 	cfg := c.Config()
 	t.Logf("cfg = %+v", cfg)
@@ -110,20 +113,22 @@ func TestDHCPv4(t *testing.T) {
 	dnsmasq.Kill() // to flush logs
 	got := dnsmasq.Actions()
 	want := []string{
-		"DHCPDISCOVER(veth0b)",
-		"DHCPOFFER(veth0b)",
-		"DHCPREQUEST(veth0b)",
-		"DHCPACK(veth0b)",
-		"DHCPRELEASE(veth0b)",
+		"DHCPDISCOVER(veth0b) 02:73:53:00:ca:fe",
+		"DHCPOFFER(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
+		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
+		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
+
+		"DHCPDISCOVER(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
+		"DHCPOFFER(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
+		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
+		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
+
+		"DHCPRELEASE(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
 	}
-	actionOnly := func(line string) string {
-		result := line
-		if idx := strings.Index(result, " "); idx > -1 {
-			return result[:idx]
-		}
-		return result
+	trimSpace := func(line string) string {
+		return strings.TrimSpace(line)
 	}
-	if diff := cmp.Diff(got, want, cmp.Transformer("ActionOnly", actionOnly)); diff != "" {
+	if diff := cmp.Diff(got, want, cmp.Transformer("TrimSpace", trimSpace)); diff != "" {
 		t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-got +want):\n%s", diff)
 	}
 }
