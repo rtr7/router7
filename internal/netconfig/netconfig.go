@@ -434,21 +434,26 @@ func Apply(dir, root string) error {
 	var firstErr error
 
 	if err := applyDhcp4(dir); err != nil {
-		log.Printf("cannot apply dhcp4 lease: %v", err)
-		firstErr = fmt.Errorf("dhcp4: %v", err)
+		if firstErr == nil {
+			firstErr = fmt.Errorf("dhcp4: %v", err)
+		} else {
+			log.Printf("cannot apply dhcp4 lease: %v", err)
+		}
 	}
 
 	if err := applyDhcp6(dir); err != nil {
-		log.Printf("cannot apply dhcp6 lease: %v", err)
 		if firstErr == nil {
 			firstErr = fmt.Errorf("dhcp6: %v", err)
+		} else {
+			log.Printf("cannot apply dhcp6 lease: %v", err)
 		}
 	}
 
 	if err := applySysctl(); err != nil {
-		log.Printf("cannot apply sysctl config: %v", err)
 		if firstErr == nil {
 			firstErr = fmt.Errorf("sysctl: %v", err)
+		} else {
+			log.Printf("cannot apply sysctl config: %v", err)
 		}
 	}
 
