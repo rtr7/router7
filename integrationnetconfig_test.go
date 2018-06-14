@@ -106,6 +106,13 @@ func TestNetconfig(t *testing.T) {
 			t.Fatalf("netconfig.Apply: %v", err)
 		}
 
+		// Apply twice to ensure the absence of errors when dealing with
+		// already-configured interfaces, addresses, routes, … (and ensure
+		// nftables rules are replaced, not appendend to).
+		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
+			t.Fatalf("netconfig.Apply: %v", err)
+		}
+
 		b, err := ioutil.ReadFile(filepath.Join(tmp, "root", "etc", "resolv.conf"))
 		if err != nil {
 			t.Fatal(err)

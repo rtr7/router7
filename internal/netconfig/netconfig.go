@@ -142,8 +142,8 @@ func applyDhcp6(dir string) error {
 			return err
 		}
 
-		if err := netlink.AddrAdd(link, addr); err != nil {
-			return fmt.Errorf("AddrAdd(%v): %v", addr, err)
+		if err := netlink.AddrReplace(link, addr); err != nil {
+			return fmt.Errorf("AddrReplace(%v): %v", addr, err)
 		}
 	}
 	return nil
@@ -359,7 +359,7 @@ func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, pre
 func applyFirewall(dir string) error {
 	c := &nftables.Conn{}
 
-	// TODO: currently, each iteration adds a nftables.Rule — clear before?
+	c.FlushRuleset()
 
 	nat := c.AddTable(&nftables.Table{
 		Family: nftables.TableFamilyIPv4,
