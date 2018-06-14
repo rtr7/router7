@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -273,8 +274,34 @@ func ifname(n string) []byte {
 	return b
 }
 
-func portForwardExpr(proto uint8, port uint16, dest net.IP, dport uint16) []expr.Any {
-	return []expr.Any{
+func portForwardExpr(proto uint8, portMin, portMax uint16, dest net.IP, dportMin, dportMax uint16) []expr.Any {
+	var cmp []expr.Any
+	if portMin == portMax {
+		cmp = []expr.Any{
+			// [ cmp eq reg 1 0x0000e60f ]
+			&expr.Cmp{
+				Op:       expr.CmpOpEq,
+				Register: 1,
+				Data:     binaryutil.BigEndian.PutUint16(portMin),
+			},
+		}
+	} else {
+		cmp = []expr.Any{
+			// [ cmp gte reg 1 0x0000e60f ]
+			&expr.Cmp{
+				Op:       expr.CmpOpGte,
+				Register: 1,
+				Data:     binaryutil.BigEndian.PutUint16(portMin),
+			},
+			// [ cmp lte reg 1 0x0000fa0f ]
+			&expr.Cmp{
+				Op:       expr.CmpOpLte,
+				Register: 1,
+				Data:     binaryutil.BigEndian.PutUint16(portMax),
+			},
+		}
+	}
+	ex := []expr.Any{
 		// [ meta load iifname => reg 1 ]
 		&expr.Meta{Key: expr.MetaKeyIIFNAME, Register: 1},
 		// [ cmp eq reg 1 0x696c7075 0x00306b6e 0x00000000 0x00000000 ]
@@ -300,42 +327,85 @@ func portForwardExpr(proto uint8, port uint16, dest net.IP, dport uint16) []expr
 			Offset:       2, // TODO
 			Len:          2, // TODO
 		},
-		// [ cmp eq reg 1 0x0000e60f ]
-		&expr.Cmp{
-			Op:       expr.CmpOpEq,
-			Register: 1,
-			Data:     binaryutil.BigEndian.PutUint16(port),
-		},
-
+	}
+	ex = append(ex, cmp...)
+	ex = append(ex,
 		// [ immediate reg 1 0x0217a8c0 ]
 		&expr.Immediate{
 			Register: 1,
 			Data:     dest.To4(),
 		},
-		// [ immediate reg 2 0x0000f00f ]
-		&expr.Immediate{
-			Register: 2,
-			Data:     binaryutil.BigEndian.PutUint16(dport),
-		},
-		// [ nat dnat ip addr_min reg 1 addr_max reg 0 proto_min reg 2 proto_max reg 0 ]
-		&expr.NAT{
-			Type:        expr.NATTypeDestNAT,
-			Family:      unix.NFPROTO_IPV4,
-			RegAddrMin:  1,
-			RegProtoMin: 2,
-		},
+	)
+	if dportMin == dportMax {
+		ex = append(ex,
+			// [ immediate reg 2 0x0000f00f ]
+			&expr.Immediate{
+				Register: 2,
+				Data:     binaryutil.BigEndian.PutUint16(dportMin),
+			},
+			// [ nat dnat ip addr_min reg 1 addr_max reg 0 proto_min reg 2 proto_max reg 0 ]
+			&expr.NAT{
+				Type:        expr.NATTypeDestNAT,
+				Family:      unix.NFPROTO_IPV4,
+				RegAddrMin:  1,
+				RegProtoMin: 2,
+			},
+		)
+	} else {
+		ex = append(ex,
+			// [ immediate reg 2 0x0000e60f ]
+			&expr.Immediate{
+				Register: 2,
+				Data:     binaryutil.BigEndian.PutUint16(dportMin),
+			},
+			// [ immediate reg 3 0x0000fa0f ]
+			&expr.Immediate{
+				Register: 3,
+				Data:     binaryutil.BigEndian.PutUint16(dportMax),
+			},
+			// [ nat dnat ip addr_min reg 1 addr_max reg 0 proto_min reg 2 proto_max reg 3 ]
+			&expr.NAT{
+				Type:        expr.NATTypeDestNAT,
+				Family:      unix.NFPROTO_IPV4,
+				RegAddrMin:  1,
+				RegProtoMin: 2,
+				RegProtoMax: 3,
+			},
+		)
 	}
+	return ex
 }
 
 type portForwarding struct {
 	Proto    string `json:"proto"`     // e.g. “tcp” (or “tcp,udp”)
-	Port     uint16 `json:"port"`      // e.g. “8080”
+	Port     string `json:"port"`      // e.g. “8080” (or “8080-8090”)
 	DestAddr string `json:"dest_addr"` // e.g. “192.168.42.2”
-	DestPort uint16 `json:"dest_port"` // e.g. “80”
+	DestPort string `json:"dest_port"` // e.g. “80” (or “80-90”)
 }
 
 type portForwardings struct {
 	Forwardings []portForwarding `json:"forwardings"`
+}
+
+var rangeRe = regexp.MustCompile(`^([0-9]+)(?:-([0-9]+))?$`)
+
+func parsePort(p string) (min uint16, max uint16, _ error) {
+	matches := rangeRe.FindStringSubmatch(p)
+	if len(matches) == 0 {
+		return 0, 0, fmt.Errorf("malformed port %q, expected port number (e.g. 8080) or port range (e.g. 8080-8090)", p)
+	}
+	min64, err := strconv.ParseUint(matches[1], 0, 16)
+	if err != nil {
+		return 0, 0, fmt.Errorf("ParseInt(%q): %v", matches[1], err)
+	}
+	max64 := min64
+	if matches[2] != "" {
+		max64, err = strconv.ParseUint(matches[2], 0, 16)
+		if err != nil {
+			return 0, 0, fmt.Errorf("ParseInt(%q): %v", matches[2], err)
+		}
+	}
+	return uint16(min64), uint16(max64), nil
 }
 
 func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, prerouting *nftables.Chain) error {
@@ -362,10 +432,20 @@ func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, pre
 			default:
 				return fmt.Errorf(`unknown proto %q, expected "tcp" or "udp"`, proto)
 			}
+
+			min, max, err := parsePort(fw.Port)
+			if err != nil {
+				return err
+			}
+			dmin, dmax, err := parsePort(fw.DestPort)
+			if err != nil {
+				return err
+			}
+
 			c.AddRule(&nftables.Rule{
 				Table: nat,
 				Chain: prerouting,
-				Exprs: portForwardExpr(p, fw.Port, net.ParseIP(fw.DestAddr), fw.DestPort),
+				Exprs: portForwardExpr(p, min, max, net.ParseIP(fw.DestAddr), dmin, dmax),
 			})
 		}
 	}

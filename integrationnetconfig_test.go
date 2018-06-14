@@ -35,20 +35,20 @@ const goldenPortForwardings = `
 {
   "forwardings":[
     {
-      "port": 8080,
+      "port": "8080",
       "dest_addr": "192.168.42.23",
-      "dest_port": 9999
+      "dest_port": "9999"
     },
     {
-      "port": 8022,
+      "port": "8040-8060",
       "dest_addr": "192.168.42.99",
-      "dest_port": 22
+      "dest_port": "8040-8060"
     },
     {
       "proto": "udp",
-      "port": 53,
+      "port": "53",
       "dest_addr": "192.168.42.99",
-      "dest_port": 53
+      "dest_port": "53"
     }
   ]
 }
@@ -214,7 +214,7 @@ func TestNetconfig(t *testing.T) {
 		`	chain prerouting {`,
 		`		type nat hook prerouting priority 0; policy accept;`,
 		`		iifname "uplink0" udp dport domain dnat to 192.168.42.99:domain`,
-		`		iifname "uplink0" tcp dport 8022 dnat to 192.168.42.99:ssh`,
+		`		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060`,
 		`		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999`,
 		`	}`,
 		``,
