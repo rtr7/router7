@@ -58,6 +58,10 @@ func applyDhcp4(dir string) error {
 		return err
 	}
 
+	if got.SubnetMask == "" {
+		return fmt.Errorf("invalid DHCP lease: no subnet mask present")
+	}
+
 	subnetSize, err := subnetMaskSize(got.SubnetMask)
 	if err != nil {
 		return err
@@ -269,7 +273,7 @@ func ifname(n string) []byte {
 	return b
 }
 
-func portForwardExpr(port uint16, dest net.IP, dport uint16) []expr.Any {
+func portForwardExpr(proto uint8, port uint16, dest net.IP, dport uint16) []expr.Any {
 	return []expr.Any{
 		// [ meta load iifname => reg 1 ]
 		&expr.Meta{Key: expr.MetaKeyIIFNAME, Register: 1},
@@ -286,7 +290,7 @@ func portForwardExpr(port uint16, dest net.IP, dport uint16) []expr.Any {
 		&expr.Cmp{
 			Op:       expr.CmpOpEq,
 			Register: 1,
-			Data:     []byte{0x06}, /* TCP */
+			Data:     []byte{proto},
 		},
 
 		// [ payload load 2b @ transport header + 2 => reg 1 ]
@@ -324,9 +328,10 @@ func portForwardExpr(port uint16, dest net.IP, dport uint16) []expr.Any {
 }
 
 type portForwarding struct {
-	Port     uint16 `json:"port"`      // e.g. 8080
-	DestAddr string `json:"dest_addr"` // e.g. 192.168.42.2
-	DestPort uint16 `json:"dest_port"` // e.g. 80
+	Proto    string `json:"proto"`     // e.g. “tcp” (or “tcp,udp”)
+	Port     uint16 `json:"port"`      // e.g. “8080”
+	DestAddr string `json:"dest_addr"` // e.g. “192.168.42.2”
+	DestPort uint16 `json:"dest_port"` // e.g. “80”
 }
 
 type portForwardings struct {
@@ -347,11 +352,22 @@ func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, pre
 	}
 
 	for _, fw := range cfg.Forwardings {
-		c.AddRule(&nftables.Rule{
-			Table: nat,
-			Chain: prerouting,
-			Exprs: portForwardExpr(fw.Port, net.ParseIP(fw.DestAddr), fw.DestPort),
-		})
+		for _, proto := range strings.Split(fw.Proto, ",") {
+			var p uint8
+			switch proto {
+			case "", "tcp":
+				p = unix.IPPROTO_TCP
+			case "udp":
+				p = unix.IPPROTO_UDP
+			default:
+				return fmt.Errorf(`unknown proto %q, expected "tcp" or "udp"`, proto)
+			}
+			c.AddRule(&nftables.Rule{
+				Table: nat,
+				Chain: prerouting,
+				Exprs: portForwardExpr(p, fw.Port, net.ParseIP(fw.DestAddr), fw.DestPort),
+			})
+		}
 	}
 	return nil
 }
