@@ -3,6 +3,7 @@ package dns
 import (
 	"bytes"
 	"net"
+	"os"
 	"router7/internal/dhcp4d"
 	"testing"
 
@@ -70,6 +71,29 @@ func TestDHCP(t *testing.T) {
 		t.Fatalf("unexpected response type: got %T, want dns.A", a)
 	}
 	if got, want := a.(*dns.A).A.To4(), (net.IP{192, 168, 42, 23}); !bytes.Equal(got, want) {
+		t.Fatalf("unexpected response IP: got %v, want %v", got, want)
+	}
+}
+
+func TestHostname(t *testing.T) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Skipf("os.Hostname: %v", err)
+	}
+
+	r := &recorder{}
+	s := NewServer("127.0.0.2:0", "lan")
+	m := new(dns.Msg)
+	m.SetQuestion(hostname+".", dns.TypeA)
+	s.handleRequest(r, m)
+	if got, want := len(r.response.Answer), 1; got != want {
+		t.Fatalf("unexpected number of answers for %v: got %d, want %d", m.Question, got, want)
+	}
+	a := r.response.Answer[0]
+	if _, ok := a.(*dns.A); !ok {
+		t.Fatalf("unexpected response type: got %T, want dns.A", a)
+	}
+	if got, want := a.(*dns.A).A.To4(), (net.IP{127, 0, 0, 2}); !bytes.Equal(got, want) {
 		t.Fatalf("unexpected response IP: got %v, want %v", got, want)
 	}
 }
