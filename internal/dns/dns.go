@@ -2,6 +2,7 @@ package dns
 
 import (
 	"log"
+	"net"
 	"strings"
 	"time"
 
@@ -45,6 +46,50 @@ func (s *Server) SetLeases(leases []dhcp4d.Lease) {
 	}
 }
 
+func mustParseCIDR(s string) *net.IPNet {
+	_, ipnet, err := net.ParseCIDR(s)
+	if err != nil {
+		panic(err)
+	}
+	return ipnet
+}
+
+var (
+	localNets = []*net.IPNet{
+		// reversed: https://tools.ietf.org/html/rfc1918#section-3
+		mustParseCIDR("10.0.0.0/8"),
+		mustParseCIDR("172.16.0.0/12"),
+		mustParseCIDR("192.168.0.0/16"),
+	}
+)
+
+func reverse(ss []string) {
+	last := len(ss) - 1
+	for i := 0; i < len(ss)/2; i++ {
+		ss[i], ss[last-i] = ss[last-i], ss[i]
+	}
+}
+
+func isLocalInAddrArpa(q string) bool {
+	if !strings.HasSuffix(q, ".in-addr.arpa.") {
+		return false
+	}
+	parts := strings.Split(strings.TrimSuffix(q, ".in-addr.arpa."), ".")
+	reverse(parts)
+	ip := net.ParseIP(strings.Join(parts, "."))
+	if ip == nil {
+		return false
+	}
+	var local bool
+	for _, l := range localNets {
+		if l.Contains(ip) {
+			local = true
+			break
+		}
+	}
+	return local
+}
+
 // TODO: is handleRequest called in more than one goroutine at a time?
 // TODO: require search domains to be present, then use HandleFunc("lan.", internalName)
 func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
@@ -69,7 +114,7 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 			}
 		}
 		if q.Qtype == dns.TypePTR && q.Qclass == dns.ClassINET {
-			if strings.HasSuffix(q.Name, "168.192.in-addr.arpa.") {
+			if isLocalInAddrArpa(q.Name) {
 				if host, ok := s.hostsByIP[q.Name]; ok {
 					rr, err := dns.NewRR(q.Name + " 3600 IN PTR " + host + "." + s.domain)
 					if err != nil {

@@ -75,26 +75,53 @@ func TestDHCP(t *testing.T) {
 }
 
 func TestDHCPReverse(t *testing.T) {
-	r := &recorder{}
-	s := NewServer("localhost:0", "lan")
-	s.SetLeases([]dhcp4d.Lease{
+	for _, test := range []struct {
+		ip       net.IP
+		question string
+	}{
 		{
-			Hostname: "xps",
-			Addr:     net.IP{192, 168, 42, 23},
+			ip:       net.IP{192, 168, 42, 23},
+			question: "23.42.168.192.in-addr.arpa.",
 		},
-	})
-	m := new(dns.Msg)
-	m.SetQuestion("23.42.168.192.in-addr.arpa.", dns.TypePTR)
-	s.handleRequest(r, m)
-	if got, want := len(r.response.Answer), 1; got != want {
-		t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
-	}
-	a := r.response.Answer[0]
-	if _, ok := a.(*dns.PTR); !ok {
-		t.Fatalf("unexpected response type: got %T, want dns.A", a)
-	}
-	if got, want := a.(*dns.PTR).Ptr, "xps.lan."; got != want {
-		t.Fatalf("unexpected response record: got %q, want %q", got, want)
+
+		{
+			ip:       net.IP{10, 0, 0, 2},
+			question: "2.0.0.10.in-addr.arpa.",
+		},
+
+		{
+			ip:       net.IP{172, 16, 0, 1}, // 172.16/12 HostMin
+			question: "1.0.16.172.in-addr.arpa.",
+		},
+
+		{
+			ip:       net.IP{172, 31, 255, 254}, // 172.16/12 HostMax
+			question: "254.255.31.172.in-addr.arpa.",
+		},
+	} {
+		t.Run(test.question, func(t *testing.T) {
+			r := &recorder{}
+			s := NewServer("localhost:0", "lan")
+			s.SetLeases([]dhcp4d.Lease{
+				{
+					Hostname: "xps",
+					Addr:     test.ip,
+				},
+			})
+			m := new(dns.Msg)
+			m.SetQuestion(test.question, dns.TypePTR)
+			s.handleRequest(r, m)
+			if got, want := len(r.response.Answer), 1; got != want {
+				t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
+			}
+			a := r.response.Answer[0]
+			if _, ok := a.(*dns.PTR); !ok {
+				t.Fatalf("unexpected response type: got %T, want dns.A", a)
+			}
+			if got, want := a.(*dns.PTR).Ptr, "xps.lan."; got != want {
+				t.Fatalf("unexpected response record: got %q, want %q", got, want)
+			}
+		})
 	}
 }
 
