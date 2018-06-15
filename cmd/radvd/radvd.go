@@ -32,7 +32,7 @@ func logic() error {
 		return nil
 	}
 	if err := readConfig(); err != nil {
-		log.Printf("readConfig: %v", err)
+		log.Printf("cannot announce IPv6 prefixes: %v", err)
 	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
