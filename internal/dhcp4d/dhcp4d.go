@@ -172,11 +172,12 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 
 		lease := &Lease{
 			Num:          leaseNum,
-			Addr:         reqIP,
+			Addr:         make([]byte, 4),
 			HardwareAddr: p.CHAddr().String(),
 			Expiry:       time.Now().Add(h.leasePeriod),
 			Hostname:     string(options[dhcp4.OptionHostName]),
 		}
+		copy(lease.Addr, reqIP.To4())
 
 		if l, ok := h.leasesHW[lease.HardwareAddr]; ok {
 			if l.Expiry.IsZero() {
