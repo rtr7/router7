@@ -5,6 +5,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -21,16 +22,22 @@ import (
 var log = teelogger.NewConsole()
 
 func logic() error {
-	const configPath = "/perm/dhcp4/wire/lease.json"
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+	const leasePath = "/perm/dhcp4/wire/lease.json"
+	if err := os.MkdirAll(filepath.Dir(leasePath), 0755); err != nil {
 		return err
 	}
 	iface, err := net.InterfaceByName("uplink0")
 	if err != nil {
 		return err
 	}
+	const ackFn = "/perm/dhcp4/wire/ack"
+	ack, err := ioutil.ReadFile(ackFn)
+	if err != nil && !os.IsNotExist(err) {
+		log.Printf("Loading previous DHCPACK packet from %s: %v", ackFn, err)
+	}
 	c := dhcp4.Client{
 		Interface: iface,
+		Ack:       ack,
 	}
 	usr2 := make(chan os.Signal, 1)
 	signal.Notify(usr2, syscall.SIGUSR2)
@@ -45,8 +52,11 @@ func logic() error {
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(configPath, b, 0644); err != nil {
-			return err
+		if err := ioutil.WriteFile(leasePath, b, 0644); err != nil {
+			return fmt.Errorf("persisting lease to %s: %v", leasePath, err)
+		}
+		if err := ioutil.WriteFile(ackFn, c.Ack, 0644); err != nil {
+			return fmt.Errorf("persisting DHCPACK to %s: %v", ackFn, err)
 		}
 		if err := notify.Process("/user/netconfi", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying netconfig: %v", err)

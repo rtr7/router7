@@ -88,6 +88,7 @@ func TestDHCPv4(t *testing.T) {
 	c := dhcp4.Client{
 		Interface: iface,
 	}
+	// Obtain first, then renew
 	for i := 0; i < 2; i++ {
 		if !c.ObtainOrRenew() {
 			t.Fatal(c.Err())
@@ -96,6 +97,21 @@ func TestDHCPv4(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
+
+	// Renew once more, but with a new client object (simulating a dhcp4 process
+	// restart).
+	ack := c.Ack
+	c = dhcp4.Client{
+		Interface: iface,
+		Ack:       ack,
+	}
+	if !c.ObtainOrRenew() {
+		t.Fatal(c.Err())
+	}
+	if err := c.Err(); err != nil {
+		t.Fatal(err)
+	}
+
 	cfg := c.Config()
 	t.Logf("cfg = %+v", cfg)
 	if got, want := cfg.Router, "192.168.23.1"; got != want {
@@ -115,6 +131,9 @@ func TestDHCPv4(t *testing.T) {
 	want := []string{
 		"DHCPDISCOVER(veth0b) 02:73:53:00:ca:fe",
 		"DHCPOFFER(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
+		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
+		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
+
 		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
 		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
 

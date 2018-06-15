@@ -38,7 +38,7 @@ type Client struct {
 	generateXID  func([]byte)
 
 	// last DHCPACK packet for renewal/release
-	ack dhcp4.Packet
+	Ack dhcp4.Packet
 }
 
 // ObtainOrRenew returns false when encountering a permanent error.
@@ -76,7 +76,6 @@ func (c *Client) ObtainOrRenew() bool {
 		c.dhcp = dhcp
 	})
 	c.err = nil // clear previous error
-	// TODO: renew if c.ack != nil, fall back if renewal fails
 	ok, ack, err := c.dhcpRequest()
 	if err != nil {
 		if errno, ok := err.(syscall.Errno); ok && errno == syscall.EAGAIN {
@@ -90,7 +89,7 @@ func (c *Client) ObtainOrRenew() bool {
 		c.err = fmt.Errorf("received DHCPNAK")
 		return true // temporary error
 	}
-	c.ack = ack
+	c.Ack = ack
 	opts := ack.ParseOptions()
 
 	// DHCPACK (described in RFC2131 4.3.1)
@@ -136,8 +135,8 @@ func (c *Client) ObtainOrRenew() bool {
 }
 
 func (c *Client) Release() error {
-	err := c.dhcp.Release(c.ack)
-	c.ack = nil
+	err := c.dhcp.Release(c.Ack)
+	c.Ack = nil
 	return err
 }
 
@@ -173,7 +172,7 @@ func (c *Client) addClientId(p *dhcp4.Packet) {
 // includes the hostname.
 func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
 	var last dhcp4.Packet
-	if c.ack == nil {
+	if c.Ack == nil {
 		discoveryPacket := c.dhcp.DiscoverPacket()
 		c.addHostname(&discoveryPacket)
 		c.addClientId(&discoveryPacket)
@@ -189,7 +188,7 @@ func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
 		}
 		last = offerPacket
 	} else {
-		last = c.ack
+		last = c.Ack
 	}
 
 	requestPacket := c.dhcp.RequestPacket(&last)
@@ -208,7 +207,7 @@ func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
 
 	acknowledgementOptions := acknowledgement.ParseOptions()
 	if dhcp4.MessageType(acknowledgementOptions[dhcp4.OptionDHCPMessageType][0]) != dhcp4.ACK {
-		c.ack = nil // start over
+		c.Ack = nil // start over
 		return false, acknowledgement, nil
 	}
 
