@@ -118,8 +118,6 @@ func TestDHCPv4(t *testing.T) {
 		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
 		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
 
-		"DHCPDISCOVER(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
-		"DHCPOFFER(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
 		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
 		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
 

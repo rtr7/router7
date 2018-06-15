@@ -172,25 +172,27 @@ func (c *Client) addClientId(p *dhcp4.Packet) {
 // dhcpRequest is a copy of (dhcp4client/Client).Request which
 // includes the hostname.
 func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
-	discoveryPacket := c.dhcp.DiscoverPacket()
-	c.addHostname(&discoveryPacket)
-	c.addClientId(&discoveryPacket)
-	if c.ack != nil {
-		discoveryPacket.SetYIAddr(c.ack.YIAddr())
-		discoveryPacket.AddOption(dhcp4.OptionRequestedIPAddress, (c.ack.YIAddr()).To4())
-	}
-	discoveryPacket.PadToMinSize()
+	var last dhcp4.Packet
+	if c.ack == nil {
+		discoveryPacket := c.dhcp.DiscoverPacket()
+		c.addHostname(&discoveryPacket)
+		c.addClientId(&discoveryPacket)
+		discoveryPacket.PadToMinSize()
 
-	if err := c.dhcp.SendPacket(discoveryPacket); err != nil {
-		return false, discoveryPacket, err
+		if err := c.dhcp.SendPacket(discoveryPacket); err != nil {
+			return false, discoveryPacket, err
+		}
+
+		offerPacket, err := c.dhcp.GetOffer(&discoveryPacket)
+		if err != nil {
+			return false, offerPacket, err
+		}
+		last = offerPacket
+	} else {
+		last = c.ack
 	}
 
-	offerPacket, err := c.dhcp.GetOffer(&discoveryPacket)
-	if err != nil {
-		return false, offerPacket, err
-	}
-
-	requestPacket := c.dhcp.RequestPacket(&offerPacket)
+	requestPacket := c.dhcp.RequestPacket(&last)
 	c.addHostname(&requestPacket)
 	c.addClientId(&requestPacket)
 	requestPacket.PadToMinSize()
@@ -206,6 +208,7 @@ func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
 
 	acknowledgementOptions := acknowledgement.ParseOptions()
 	if dhcp4.MessageType(acknowledgementOptions[dhcp4.OptionDHCPMessageType][0]) != dhcp4.ACK {
+		c.ack = nil // start over
 		return false, acknowledgement, nil
 	}
 
