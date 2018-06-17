@@ -1,8 +1,10 @@
 package diag
 
 import (
+	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/digineo/go-ping"
@@ -62,7 +64,7 @@ func (d *ping4gw) Evaluate() (string, error) {
 		return "", err
 		//return fmt.Errorf("%s did not respond within %v", gw, timeout)
 	}
-	return formatRTT(rtt), nil
+	return formatRTT(rtt) + " from " + gw, nil
 }
 
 // Ping4Gateway returns a Node which succeeds when the default gateway responds
@@ -166,7 +168,7 @@ func (d *ping6gw) Evaluate() (string, error) {
 		return "", err
 		//return fmt.Errorf("%s did not respond within %v", gw, timeout)
 	}
-	return formatRTT(rtt), nil
+	return formatRTT(rtt) + " from " + gw, nil
 }
 
 // Ping6Gateway returns a Node which succeeds when the default gateway responds
@@ -236,7 +238,34 @@ func (d *ping6) Evaluate() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	rtt, err := p.Ping(addr, timeout)
+	ctx, canc := context.WithTimeout(context.Background(), timeout)
+	defer canc()
+	if strings.HasPrefix(addr.String(), "ff02::") {
+		replies, err := p.PingMulticastContext(ctx, addr)
+		if err != nil {
+			return "", err
+		}
+		addrs, err := net.InterfaceAddrs()
+		if err != nil {
+			return "", err
+		}
+		localAddr := make(map[string]bool)
+		for _, addr := range addrs {
+			ipnet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			localAddr[ipnet.IP.String()] = true
+		}
+		for reply := range replies {
+			if localAddr[reply.Address.String()] {
+				continue
+			}
+			return formatRTT(reply.Duration) + " from " + reply.Address.String(), nil
+		}
+		return "", fmt.Errorf("no responses to %s within %v", addr, timeout)
+	}
+	rtt, err := p.PingContext(ctx, addr)
 	if err != nil {
 		return "", err
 		//return fmt.Errorf("%s did not respond within %v", gw, timeout)
