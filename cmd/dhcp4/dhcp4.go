@@ -61,9 +61,6 @@ func logic() error {
 		if err := notify.Process("/user/netconfi", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying netconfig: %v", err)
 		}
-		if err := notify.Process("/user/dyndns", syscall.SIGUSR1); err != nil {
-			log.Printf("notifying dyndns: %v", err)
-		}
 		select {
 		case <-time.After(time.Until(c.Config().RenewAfter)):
 			// fallthrough and renew the DHCP lease

@@ -10,6 +10,7 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"syscall"
 
 	"github.com/google/nftables"
 	"github.com/google/nftables/binaryutil"
@@ -19,6 +20,7 @@ import (
 
 	"router7/internal/dhcp4"
 	"router7/internal/dhcp6"
+	"router7/internal/notify"
 	"router7/internal/teelogger"
 )
 
@@ -543,6 +545,10 @@ func Apply(dir, root string) error {
 		} else {
 			log.Printf("cannot apply dhcp6 lease: %v", err)
 		}
+	}
+
+	if err := notify.Process("/user/dyndns", syscall.SIGUSR1); err != nil {
+		log.Printf("notifying dyndns: %v", err)
 	}
 
 	if err := applySysctl(); err != nil {
