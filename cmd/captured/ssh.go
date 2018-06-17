@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -56,6 +57,9 @@ func (s *session) request(req *ssh.Request) error {
 		}
 		log.Printf("exec, wantReply %v, payload %q", req.WantReply, string(req.Payload[4:]))
 
+		ctx, canc := context.WithCancel(context.Background())
+		defer canc()
+
 		pcapw := pcapgo.NewWriter(s.channel)
 		if err := pcapw.WriteFileHeader(1600, layers.LinkTypeEthernet); err != nil {
 			return err
@@ -76,8 +80,13 @@ func (s *session) request(req *ssh.Request) error {
 
 			pkgsrc := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
 			go func() {
+				defer handle.Close()
 				for packet := range pkgsrc.Packets() {
-					packets <- packet
+					select {
+					case packets <- packet:
+					case <-ctx.Done():
+						return
+					}
 				}
 			}()
 		}
@@ -85,7 +94,6 @@ func (s *session) request(req *ssh.Request) error {
 		req.Reply(true, nil)
 
 		for packet := range packets {
-			log.Printf("packet: %+v", packet)
 			if err := pcapw.WritePacket(packet.Metadata().CaptureInfo, packet.Data()); err != nil {
 				return fmt.Errorf("pcap.WritePacket(): %v", err)
 			}
