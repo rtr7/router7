@@ -3,6 +3,7 @@ package dns
 import (
 	"log"
 	"net"
+	"net/http"
 	"os"
 	"strings"
 	"sync"
@@ -10,9 +11,10 @@ import (
 
 	"router7/internal/dhcp4d"
 
-	"golang.org/x/time/rate"
-
 	"github.com/miekg/dns"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"golang.org/x/time/rate"
 )
 
 type Server struct {
@@ -21,6 +23,10 @@ type Server struct {
 	domain    string
 	upstream  string
 	sometimes *rate.Limiter
+	prom      struct {
+		registry *prometheus.Registry
+		queries  prometheus.Counter
+	}
 
 	mu           sync.Mutex
 	hostname, ip string
@@ -40,6 +46,13 @@ func NewServer(addr, domain string) *Server {
 		hostname:  hostname,
 		ip:        ip,
 	}
+	server.prom.registry = prometheus.NewRegistry()
+	server.prom.queries = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "dns_queries",
+		Help: "Number of DNS queries received",
+	})
+	server.prom.registry.MustRegister(server.prom.queries)
+	server.prom.registry.MustRegister(prometheus.NewGoCollector())
 	server.initHostsLocked()
 	dns.HandleFunc(".", server.handleRequest)
 	return server
@@ -66,6 +79,10 @@ func (s *Server) hostByIP(n string) (string, bool) {
 	defer s.mu.Unlock()
 	r, ok := s.hostsByIP[n]
 	return r, ok
+}
+
+func (s *Server) PrometheusHandler() http.Handler {
+	return promhttp.HandlerFor(s.prom.registry, promhttp.HandlerOpts{})
 }
 
 func (s *Server) SetLeases(leases []dhcp4d.Lease) {
@@ -126,6 +143,7 @@ func isLocalInAddrArpa(q string) bool {
 
 // TODO: require search domains to be present, then use HandleFunc("lan.", internalName)
 func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
+	s.prom.queries.Inc()
 	if len(r.Question) == 1 { // TODO: answer all questions we can answer
 		q := r.Question[0]
 		if q.Qtype == dns.TypeA && q.Qclass == dns.ClassINET {

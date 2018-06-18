@@ -547,8 +547,13 @@ func Apply(dir, root string) error {
 		}
 	}
 
-	if err := notify.Process("/user/dyndns", syscall.SIGUSR1); err != nil {
-		log.Printf("notifying dyndns: %v", err)
+	for _, process := range []string{
+		"dyndns", // depends on the public IPv4 address
+		"dnsd",   // listens on private IPv4/IPv6 and public IPv6Net1
+	} {
+		if err := notify.Process("/user/"+process, syscall.SIGUSR1); err != nil {
+			log.Printf("notifying %s: %v", process, err)
+		}
 	}
 
 	if err := applySysctl(); err != nil {

@@ -6,14 +6,32 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
+	"github.com/gokrazy/gokrazy"
+
 	"router7/internal/dhcp4d"
 	"router7/internal/dns"
+	"router7/internal/multilisten"
 	"router7/internal/netconfig"
+
+	_ "net/http/pprof"
 )
+
+func updateListeners() error {
+	hosts, err := gokrazy.PrivateInterfaceAddrs()
+	if err != nil {
+		return err
+	}
+	if net1, err := multilisten.IPv6Net1("/perm"); err == nil {
+		hosts = append(hosts, net1)
+	}
+
+	return multilisten.ListenAndServe(hosts, "8053", http.DefaultServeMux)
+}
 
 func logic() error {
 	// TODO: set correct upstream DNS resolver(s)
@@ -37,10 +55,15 @@ func logic() error {
 	if err := readLeases(); err != nil {
 		log.Printf("cannot resolve DHCP hostnames: %v", err)
 	}
+	http.Handle("/metrics", srv.PrometheusHandler())
+	updateListeners()
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
 	go func() {
 		for range ch {
+			if err := updateListeners(); err != nil {
+				log.Printf("updateListeners: %v", err)
+			}
 			if err := readLeases(); err != nil {
 				log.Printf("readLeases: %v", err)
 			}
