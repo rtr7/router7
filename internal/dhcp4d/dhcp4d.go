@@ -164,10 +164,9 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		if server, ok := options[dhcp4.OptionServerIdentifier]; ok && !net.IP(server).Equal(h.serverIP) {
 			return nil // message not for this dhcp server
 		}
-		nak := dhcp4.ReplyPacket(p, dhcp4.NAK, h.serverIP, nil, 0, nil)
 		leaseNum := h.canLease(reqIP, p.CHAddr().String())
 		if leaseNum == -1 {
-			return nak
+			return dhcp4.ReplyPacket(p, dhcp4.NAK, h.serverIP, nil, 0, nil)
 		}
 
 		lease := &Lease{
