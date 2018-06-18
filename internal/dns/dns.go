@@ -24,8 +24,10 @@ type Server struct {
 	upstream  string
 	sometimes *rate.Limiter
 	prom      struct {
-		registry *prometheus.Registry
-		queries  prometheus.Counter
+		registry  *prometheus.Registry
+		queries   prometheus.Counter
+		upstream  *prometheus.CounterVec
+		questions prometheus.Histogram
 	}
 
 	mu           sync.Mutex
@@ -47,11 +49,29 @@ func NewServer(addr, domain string) *Server {
 		ip:        ip,
 	}
 	server.prom.registry = prometheus.NewRegistry()
+
 	server.prom.queries = prometheus.NewCounter(prometheus.CounterOpts{
 		Name: "dns_queries",
 		Help: "Number of DNS queries received",
 	})
 	server.prom.registry.MustRegister(server.prom.queries)
+
+	server.prom.upstream = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "dns_upstream",
+			Help: "Which upstream answered which DNS query",
+		},
+		[]string{"upstream"},
+	)
+	server.prom.registry.MustRegister(server.prom.upstream)
+
+	server.prom.questions = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "dns_questions",
+		Help:    "Number of questions in each DNS request",
+		Buckets: prometheus.LinearBuckets(0, 1, 10),
+	})
+	server.prom.registry.MustRegister(server.prom.questions)
+
 	server.prom.registry.MustRegister(prometheus.NewGoCollector())
 	server.initHostsLocked()
 	dns.HandleFunc(".", server.handleRequest)
@@ -144,6 +164,7 @@ func isLocalInAddrArpa(q string) bool {
 // TODO: require search domains to be present, then use HandleFunc("lan.", internalName)
 func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 	s.prom.queries.Inc()
+	s.prom.questions.Observe(float64(len(r.Question)))
 	if len(r.Question) == 1 { // TODO: answer all questions we can answer
 		q := r.Question[0]
 		if q.Qtype == dns.TypeA && q.Qclass == dns.ClassINET {
@@ -160,6 +181,7 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 					m.SetReply(r)
 					m.Answer = append(m.Answer, rr)
 					w.WriteMsg(m)
+					s.prom.upstream.WithLabelValues("local").Inc()
 					return
 				}
 			}
@@ -175,6 +197,7 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 					m.SetReply(r)
 					m.Answer = append(m.Answer, rr)
 					w.WriteMsg(m)
+					s.prom.upstream.WithLabelValues("local").Inc()
 					return
 				}
 			}
@@ -189,4 +212,5 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 		return // DNS has no reply for resolving errors
 	}
 	w.WriteMsg(in)
+	s.prom.upstream.WithLabelValues("DNS").Inc()
 }
