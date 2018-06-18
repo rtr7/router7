@@ -83,7 +83,9 @@ func (s *Server) initHostsLocked() {
 	s.hostsByIP = make(map[string]string)
 	if s.hostname != "" && s.ip != "" {
 		s.hostsByName[s.hostname] = s.ip
-		s.hostsByIP[s.ip] = s.hostname
+		if rev, err := dns.ReverseAddr(s.ip); err == nil {
+			s.hostsByIP[rev] = s.hostname
+		}
 	}
 }
 
@@ -127,6 +129,11 @@ func mustParseCIDR(s string) *net.IPNet {
 
 var (
 	localNets = []*net.IPNet{
+		// loopback: https://tools.ietf.org/html/rfc3330#section-2
+		mustParseCIDR("127.0.0.0/8"),
+		// loopback: https://tools.ietf.org/html/rfc3513#section-2.4
+		mustParseCIDR("::1/128"),
+
 		// reversed: https://tools.ietf.org/html/rfc1918#section-3
 		mustParseCIDR("10.0.0.0/8"),
 		mustParseCIDR("172.16.0.0/12"),
