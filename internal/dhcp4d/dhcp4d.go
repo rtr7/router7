@@ -54,7 +54,7 @@ func NewHandler(dir string) (*Handler, error) {
 		leasesIP:    make(map[int]*Lease),
 		serverIP:    serverIP,
 		start:       start,
-		leaseRange:  200,
+		leaseRange:  230,
 		leasePeriod: 2 * time.Hour,
 		options: dhcp4.Options{
 			dhcp4.OptionSubnetMask:       []byte{255, 255, 255, 0},
