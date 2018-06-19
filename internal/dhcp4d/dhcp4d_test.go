@@ -167,7 +167,7 @@ func TestPoolBoundaries(t *testing.T) {
 		hardwareAddr = net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}
 	)
 
-	for _, last := range []byte{1, 202} {
+	for _, last := range []byte{1, 242} {
 		addr[len(addr)-1] = last
 		p := request(addr, hardwareAddr)
 		resp := handler.ServeDHCP(p, dhcp4.Request, p.ParseOptions())
@@ -274,7 +274,7 @@ func TestExpiration(t *testing.T) {
 
 	t.Run("allocate entire pool", func(t *testing.T) {
 		// 1 is the DHCP server,
-		for i := 1; i < 1+200; i++ {
+		for i := 1; i < 1+230; i++ {
 			addr[len(addr)-1] = byte(1 + (i % 254)) // avoid .0 (net) and .255 (broadcast)
 			hardwareAddr[len(hardwareAddr)-1] = addr[len(addr)-1]
 			p := request(addr, hardwareAddr)
@@ -287,7 +287,7 @@ func TestExpiration(t *testing.T) {
 
 	t.Run("re-allocate", func(t *testing.T) {
 		// 1 is the DHCP server,
-		for i := 1; i < 1+200; i++ {
+		for i := 1; i < 1+230; i++ {
 			addr[len(addr)-1] = byte(1 + (i % 254)) // avoid .0 (net) and .255 (broadcast)
 			hardwareAddr[len(hardwareAddr)-1] = addr[len(addr)-1]
 			p := request(addr, hardwareAddr)
@@ -300,7 +300,7 @@ func TestExpiration(t *testing.T) {
 
 	t.Run("full", func(t *testing.T) {
 		// 1 is the DHCP server,
-		for i := 1; i < 1+200; i++ {
+		for i := 1; i < 1+230; i++ {
 			addr[len(addr)-1] = byte(1 + (i % 254)) // avoid .0 (net) and .255 (broadcast)
 			hardwareAddr[len(hardwareAddr)-1] = addr[len(addr)-1] - 1
 			p := request(addr, hardwareAddr)
@@ -323,7 +323,7 @@ func TestExpiration(t *testing.T) {
 
 	t.Run("re-allocate after expiration", func(t *testing.T) {
 		// 1 is the DHCP server,
-		for i := 1; i < 1+200; i++ {
+		for i := 1; i < 1+230; i++ {
 			addr[len(addr)-1] = byte(1 + (i % 254)) // avoid .0 (net) and .255 (broadcast)
 			p := request(addr, hardwareAddr)
 			resp := handler.ServeDHCP(p, dhcp4.Request, p.ParseOptions())
