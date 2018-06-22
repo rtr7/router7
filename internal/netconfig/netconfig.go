@@ -257,7 +257,7 @@ func applyInterfaces(dir, root string) error {
 
 			if details.Name == "lan0" {
 				b := []byte("nameserver " + addr.IP.String() + "\n")
-				fn := filepath.Join(root, "etc", "resolv.conf")
+				fn := filepath.Join(root, "tmp", "resolv.conf")
 				if err := os.Remove(fn); err != nil && !os.IsNotExist(err) {
 					return err
 				}

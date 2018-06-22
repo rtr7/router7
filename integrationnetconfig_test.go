@@ -108,6 +108,10 @@ func TestNetconfig(t *testing.T) {
 			t.Fatal(err)
 		}
 
+		if err := os.MkdirAll(filepath.Join(tmp, "root", "tmp"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
 		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
 			t.Fatalf("netconfig.Apply: %v", err)
 		}
@@ -119,12 +123,12 @@ func TestNetconfig(t *testing.T) {
 			t.Fatalf("netconfig.Apply: %v", err)
 		}
 
-		b, err := ioutil.ReadFile(filepath.Join(tmp, "root", "etc", "resolv.conf"))
+		b, err := ioutil.ReadFile(filepath.Join(tmp, "root", "tmp", "resolv.conf"))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if got, want := strings.TrimSpace(string(b)), "nameserver 192.168.42.1"; got != want {
-			t.Errorf("/etc/resolv.conf: got %q, want %q", got, want)
+			t.Errorf("/tmp/resolv.conf: got %q, want %q", got, want)
 		}
 
 		return

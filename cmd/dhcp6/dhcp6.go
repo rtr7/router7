@@ -51,7 +51,7 @@ func logic() error {
 		if err := ioutil.WriteFile(configPath, b, 0644); err != nil {
 			return err
 		}
-		if err := notify.Process("/user/netconfi", syscall.SIGUSR1); err != nil {
+		if err := notify.Process("/user/netconfigd", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying netconfig: %v", err)
 		}
 		if err := notify.Process("/user/radvd", syscall.SIGUSR1); err != nil {

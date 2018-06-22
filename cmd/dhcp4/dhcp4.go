@@ -58,7 +58,7 @@ func logic() error {
 		if err := ioutil.WriteFile(ackFn, c.Ack, 0644); err != nil {
 			return fmt.Errorf("persisting DHCPACK to %s: %v", ackFn, err)
 		}
-		if err := notify.Process("/user/netconfi", syscall.SIGUSR1); err != nil {
+		if err := notify.Process("/user/netconfigd", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying netconfig: %v", err)
 		}
 		select {
