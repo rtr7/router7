@@ -153,12 +153,14 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			return nil // no free leases
 		}
 
-		return dhcp4.ReplyPacket(p,
+		pkt := dhcp4.ReplyPacket(p,
 			dhcp4.Offer,
 			h.serverIP,
 			dhcp4.IPAdd(h.start, free),
 			h.leasePeriod,
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
+		pkt.SetBroadcast(true)
+		return pkt
 
 	case dhcp4.Request:
 		if server, ok := options[dhcp4.OptionServerIdentifier]; ok && !net.IP(server).Equal(h.serverIP) {
