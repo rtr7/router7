@@ -6,11 +6,15 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"syscall"
 	"time"
 
 	"router7/internal/netconfig"
 
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
 	"github.com/krolaw/dhcp4"
+	"github.com/mdlayher/raw"
 )
 
 type Lease struct {
@@ -33,6 +37,8 @@ type Handler struct {
 	options     dhcp4.Options
 	leasesHW    map[string]*Lease
 	leasesIP    map[int]*Lease
+	rawConn     net.PacketConn
+	iface       *net.Interface
 
 	timeNow func() time.Time
 
@@ -40,16 +46,30 @@ type Handler struct {
 	Leases func([]*Lease)
 }
 
-func NewHandler(dir string) (*Handler, error) {
+func NewHandler(dir string, iface *net.Interface, conn net.PacketConn) (*Handler, error) {
 	serverIP, err := netconfig.LinkAddress(dir, "lan0")
 	if err != nil {
 		return nil, err
+	}
+	if iface == nil {
+		iface, err = net.InterfaceByName("lan0")
+		if err != nil {
+			return nil, err
+		}
+	}
+	if conn == nil {
+		conn, err = raw.ListenPacket(iface, syscall.ETH_P_ALL, nil)
+		if err != nil {
+			return nil, err
+		}
 	}
 	serverIP = serverIP.To4()
 	start := make(net.IP, len(serverIP))
 	copy(start, serverIP)
 	start[len(start)-1] += 1
 	return &Handler{
+		rawConn:     conn,
+		iface:       iface,
 		leasesHW:    make(map[string]*Lease),
 		leasesIP:    make(map[int]*Lease),
 		serverIP:    serverIP,
@@ -122,8 +142,47 @@ func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
 	return -1 // lease unavailable
 }
 
-// TODO: is ServeDHCP always run from the same goroutine, or do we need locking?
 func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options dhcp4.Options) dhcp4.Packet {
+	reply := h.serveDHCP(p, msgType, options)
+	buf := gopacket.NewSerializeBuffer()
+	opts := gopacket.SerializeOptions{
+		ComputeChecksums: true,
+		FixLengths:       true,
+	}
+	ethernet := &layers.Ethernet{
+		DstMAC:       p.CHAddr(),
+		SrcMAC:       h.iface.HardwareAddr,
+		EthernetType: layers.EthernetTypeIPv4,
+	}
+
+	ip := &layers.IPv4{
+		Version:  4,
+		TTL:      255,
+		SrcIP:    h.serverIP,
+		DstIP:    reply.YIAddr(),
+		Protocol: layers.IPProtocolUDP,
+		Flags:    layers.IPv4DontFragment,
+	}
+	udp := &layers.UDP{
+		SrcPort: 67,
+		DstPort: 68,
+	}
+	udp.SetNetworkLayerForChecksum(ip)
+	gopacket.SerializeLayers(buf, opts,
+		ethernet,
+		ip,
+		udp,
+		gopacket.Payload(reply))
+
+	if _, err := h.rawConn.WriteTo(buf.Bytes(), &raw.Addr{p.CHAddr()}); err != nil {
+		log.Printf("WriteTo: %v", err)
+	}
+
+	return nil
+}
+
+// TODO: is ServeDHCP always run from the same goroutine, or do we need locking?
+func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options dhcp4.Options) dhcp4.Packet {
 	reqIP := net.IP(options[dhcp4.OptionRequestedIPAddress])
 	if reqIP == nil {
 		reqIP = net.IP(p.CIAddr())
@@ -153,14 +212,12 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			return nil // no free leases
 		}
 
-		pkt := dhcp4.ReplyPacket(p,
+		return dhcp4.ReplyPacket(p,
 			dhcp4.Offer,
 			h.serverIP,
 			dhcp4.IPAdd(h.start, free),
 			h.leasePeriod,
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
-		pkt.SetBroadcast(true)
-		return pkt
 
 	case dhcp4.Request:
 		if server, ok := options[dhcp4.OptionServerIdentifier]; ok && !net.IP(server).Equal(h.serverIP) {
@@ -193,6 +250,7 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 
 		h.leasesIP[leaseNum] = lease
 		h.leasesHW[lease.HardwareAddr] = lease
+		log.Printf("handed out lease %+v (ip bytes: %#v)", lease, lease.Addr)
 		if h.Leases != nil {
 			var leases []*Lease
 			for _, l := range h.leasesIP {
@@ -202,7 +260,6 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		}
 		return dhcp4.ReplyPacket(p, dhcp4.ACK, h.serverIP, reqIP, h.leasePeriod,
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
-
 	}
 	return nil
 }

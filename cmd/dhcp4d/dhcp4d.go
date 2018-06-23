@@ -39,7 +39,7 @@ func logic() error {
 		return err
 	}
 	errs := make(chan error)
-	handler, err := dhcp4d.NewHandler("/perm")
+	handler, err := dhcp4d.NewHandler("/perm", nil, nil)
 	if err != nil {
 		return err
 	}
