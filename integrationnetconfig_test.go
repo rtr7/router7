@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/google/nftables/expr"
 )
 
 const goldenInterfaces = `
@@ -111,6 +112,8 @@ func TestNetconfig(t *testing.T) {
 		if err := os.MkdirAll(filepath.Join(tmp, "root", "tmp"), 0755); err != nil {
 			t.Fatal(err)
 		}
+
+		netconfig.DefaultCounter = expr.Counter{Packets: 23, Bytes: 42}
 
 		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
 			t.Fatalf("netconfig.Apply: %v", err)
@@ -225,6 +228,18 @@ func TestNetconfig(t *testing.T) {
 		`	chain postrouting {`,
 		`		type nat hook postrouting priority 100; policy accept;`,
 		`		oifname "uplink0" masquerade`,
+		`	}`,
+		`}`,
+		`table ip filter {`,
+		`	chain forward {`,
+		`		type filter hook forward priority 0; policy accept;`,
+		`		counter packets 23 bytes 42`,
+		`	}`,
+		`}`,
+		`table ip6 filter {`,
+		`	chain forward {`,
+		`		type filter hook forward priority 0; policy accept;`,
+		`		counter packets 23 bytes 42`,
 		`	}`,
 		`}`,
 	}

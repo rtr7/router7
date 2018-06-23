@@ -454,6 +454,28 @@ func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, pre
 	return nil
 }
 
+// DefaultCounter is overridden while testing
+var DefaultCounter expr.Counter
+
+func getCounter(c *nftables.Conn, table *nftables.Table, chain *nftables.Chain) expr.Counter {
+	rules, err := c.GetRule(table, chain)
+	if err != nil {
+		return DefaultCounter
+	}
+	if got, want := len(rules), 1; got != want {
+		log.Printf("could not carry counter values: unexpected number of rules in table %v, chain %v: got %d, want %d", table.Name, chain.Name, got, want)
+		return DefaultCounter
+	}
+	if got, want := len(rules[0].Exprs), 1; got != want {
+		log.Printf("could not carry counter values: unexpected number of exprs in rule 0 in table %v, chain %v: got %d, want %d", table.Name, chain.Name, got, want)
+		return DefaultCounter
+	}
+	if ce, ok := rules[0].Exprs[0].(*expr.Counter); ok {
+		return *ce
+	}
+	return DefaultCounter
+}
+
 func applyFirewall(dir string) error {
 	c := &nftables.Conn{}
 
@@ -499,6 +521,37 @@ func applyFirewall(dir string) error {
 
 	if err := applyPortForwardings(dir, c, nat, prerouting); err != nil {
 		return err
+	}
+
+	filter4 := c.AddTable(&nftables.Table{
+		Family: nftables.TableFamilyIPv4,
+		Name:   "filter",
+	})
+
+	filter6 := c.AddTable(&nftables.Table{
+		Family: nftables.TableFamilyIPv6,
+		Name:   "filter",
+	})
+
+	for _, filter := range []*nftables.Table{filter4, filter6} {
+		forward := c.AddChain(&nftables.Chain{
+			Name:     "forward",
+			Hooknum:  nftables.ChainHookForward,
+			Priority: nftables.ChainPriorityFilter,
+			Table:    filter,
+			Type:     nftables.ChainTypeFilter,
+		})
+
+		counter := getCounter(c, filter, forward)
+
+		c.AddRule(&nftables.Rule{
+			Table: filter,
+			Chain: forward,
+			Exprs: []expr.Any{
+				// [ counter pkts 23 bytes 42 ]
+				&counter,
+			},
+		})
 	}
 
 	return c.Flush()
