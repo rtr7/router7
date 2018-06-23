@@ -558,8 +558,6 @@ func applyFirewall(dir string) error {
 }
 
 func applySysctl() error {
-	// TODO: increase NAT table size
-	// TODO: increase keepalive to 7200(?)
 	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1"), 0644); err != nil {
 		return fmt.Errorf("sysctl(net.ipv4.ip_forward=1): %v", err)
 	}
