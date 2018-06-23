@@ -60,19 +60,31 @@ func TestDHCP(t *testing.T) {
 			Addr:     net.IP{192, 168, 42, 23},
 		},
 	})
-	m := new(dns.Msg)
-	m.SetQuestion("xps.lan.", dns.TypeA)
-	s.handleRequest(r, m)
-	if got, want := len(r.response.Answer), 1; got != want {
-		t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
-	}
-	a := r.response.Answer[0]
-	if _, ok := a.(*dns.A); !ok {
-		t.Fatalf("unexpected response type: got %T, want dns.A", a)
-	}
-	if got, want := a.(*dns.A).A.To4(), (net.IP{192, 168, 42, 23}); !bytes.Equal(got, want) {
-		t.Fatalf("unexpected response IP: got %v, want %v", got, want)
-	}
+
+	t.Run("xps.lan.", func(t *testing.T) {
+		m := new(dns.Msg)
+		m.SetQuestion("xps.lan.", dns.TypeA)
+		s.handleRequest(r, m)
+		if got, want := len(r.response.Answer), 1; got != want {
+			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
+		}
+		a := r.response.Answer[0]
+		if _, ok := a.(*dns.A); !ok {
+			t.Fatalf("unexpected response type: got %T, want dns.A", a)
+		}
+		if got, want := a.(*dns.A).A.To4(), (net.IP{192, 168, 42, 23}); !bytes.Equal(got, want) {
+			t.Fatalf("unexpected response IP: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("notfound.lan.", func(t *testing.T) {
+		m := new(dns.Msg)
+		m.SetQuestion("notfound.lan.", dns.TypeA)
+		s.handleRequest(r, m)
+		if got, want := r.response.Rcode, dns.RcodeNameError; got != want {
+			t.Fatalf("unexpected rcode: got %v, want %v", got, want)
+		}
+	})
 }
 
 func TestHostname(t *testing.T) {
@@ -166,6 +178,18 @@ func TestDHCPReverse(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("no leases", func(t *testing.T) {
+		r := &recorder{}
+		s := NewServer("localhost:0", "lan")
+		m := new(dns.Msg)
+		m.SetQuestion("254.255.31.172.in-addr.arpa.", dns.TypePTR)
+		s.handleRequest(r, m)
+		if got, want := r.response.Rcode, dns.RcodeNameError; got != want {
+			t.Fatalf("unexpected rcode: got %v, want %v", got, want)
+		}
+	})
+
 }
 
 // TODO: multiple questions

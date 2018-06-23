@@ -179,6 +179,7 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 			name = strings.TrimSuffix(name, "."+s.domain)
 
 			if !strings.Contains(name, ".") {
+				s.prom.upstream.WithLabelValues("local").Inc()
 				if host, ok := s.hostByName(name); ok {
 					rr, err := dns.NewRR(q.Name + " 3600 IN A " + host)
 					if err != nil {
@@ -188,13 +189,19 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 					m.SetReply(r)
 					m.Answer = append(m.Answer, rr)
 					w.WriteMsg(m)
-					s.prom.upstream.WithLabelValues("local").Inc()
 					return
 				}
+				// Send an authoritative NXDOMAIN for local names:
+				m := new(dns.Msg)
+				m.SetReply(r)
+				m.SetRcode(r, dns.RcodeNameError)
+				w.WriteMsg(m)
+				return
 			}
 		}
 		if q.Qtype == dns.TypePTR && q.Qclass == dns.ClassINET {
 			if isLocalInAddrArpa(q.Name) {
+				s.prom.upstream.WithLabelValues("local").Inc()
 				if host, ok := s.hostByIP(q.Name); ok {
 					rr, err := dns.NewRR(q.Name + " 3600 IN PTR " + host + "." + s.domain)
 					if err != nil {
@@ -204,9 +211,14 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 					m.SetReply(r)
 					m.Answer = append(m.Answer, rr)
 					w.WriteMsg(m)
-					s.prom.upstream.WithLabelValues("local").Inc()
 					return
 				}
+				// Send an authoritative NXDOMAIN for local names:
+				m := new(dns.Msg)
+				m.SetReply(r)
+				m.SetRcode(r, dns.RcodeNameError)
+				w.WriteMsg(m)
+				return
 			}
 		}
 	}
