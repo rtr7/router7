@@ -78,7 +78,7 @@ func (prb *packetRingBuffer) packetsLocked() []gopacket.Packet {
 }
 
 func logic() error {
-	prb := newPacketRingBuffer(5000)
+	prb := newPacketRingBuffer(50000)
 
 	var eg errgroup.Group
 	eg.Go(func() error { return listenAndServe(prb) })
