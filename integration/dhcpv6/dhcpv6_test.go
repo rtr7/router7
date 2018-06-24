@@ -16,7 +16,7 @@ import (
 var v6AddrRe = regexp.MustCompile(`2001:db8::[^ ]+`)
 
 func TestDHCPv6(t *testing.T) {
-	const ns = "ns0" // name of the network namespace to use for this test
+	const ns = "ns1" // name of the network namespace to use for this test
 
 	if err := exec.Command("ip", "netns", "add", ns).Run(); err != nil {
 		t.Fatalf("ip netns add %s: %v", ns, err)
@@ -45,7 +45,7 @@ func TestDHCPv6(t *testing.T) {
 		}
 	}
 
-	dnsmasq := dnsmasq.Run(t, "veth1b")
+	dnsmasq := dnsmasq.Run(t, "veth1b", ns)
 	defer dnsmasq.Kill()
 
 	// f, err := os.Create("/tmp/pcap6")

@@ -30,9 +30,7 @@ type Process struct {
 var dhcpActionRe = regexp.MustCompile(` (DHCP[^(]+\(.*)$`)
 
 // Run starts a dnsmasq(8) process and returns a handle to it.
-func Run(t *testing.T, iface string) *Process {
-	const ns = "ns0" // TODO: configurable?
-
+func Run(t *testing.T, iface, ns string) *Process {
 	ready, err := ioutil.TempFile("", "router7")
 	if err != nil {
 		t.Fatal(err)

@@ -9,7 +9,7 @@ import (
 )
 
 func Example(t *testing.T) {
-	dnsmasq := dnsmasq.Run(t, "veth0b")
+	dnsmasq := dnsmasq.Run(t, "veth0b", "ns0")
 	defer dnsmasq.Kill()
 	// test code here
 

@@ -10,7 +10,7 @@ import (
 )
 
 func TestRouterAdvertisement(t *testing.T) {
-	const ns = "ns0" // name of the network namespace to use for this test
+	const ns = "ns2" // name of the network namespace to use for this test
 
 	if err := exec.Command("ip", "netns", "add", ns).Run(); err != nil {
 		t.Fatalf("ip netns add %s: %v", ns, err)
@@ -18,20 +18,20 @@ func TestRouterAdvertisement(t *testing.T) {
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
 	nsSetup := []*exec.Cmd{
-		exec.Command("ip", "link", "add", "veth0a", "type", "veth", "peer", "name", "veth0b", "netns", ns),
+		exec.Command("ip", "link", "add", "veth2a", "type", "veth", "peer", "name", "veth2b", "netns", ns),
 
 		// Disable Duplicate Address Detection: until DAD completes, the link-local
 		// address remains in state “tentative”, resulting in any attempts to
 		// bind(2) to the address to fail with -EADDRNOTAVAIL.
-		exec.Command("/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth0a/accept_dad"),
-		exec.Command("ip", "netns", "exec", ns, "/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth0b/accept_dad"),
+		exec.Command("/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth2a/accept_dad"),
+		exec.Command("ip", "netns", "exec", ns, "/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth2b/accept_dad"),
 
-		exec.Command("ip", "link", "set", "veth0a", "up"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "192.168.23.1/24", "dev", "veth0b"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth0b", "up"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth0b"),
+		exec.Command("ip", "link", "set", "veth2a", "up"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "192.168.23.1/24", "dev", "veth2b"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth2b", "up"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth2b"),
 
-		exec.Command("/bin/sh", "-c", "echo 1 > /proc/sys/net/ipv6/conf/veth0a/forwarding"),
+		exec.Command("/bin/sh", "-c", "echo 1 > /proc/sys/net/ipv6/conf/veth2a/forwarding"),
 	}
 
 	for _, cmd := range nsSetup {
@@ -59,7 +59,7 @@ func TestRouterAdvertisement(t *testing.T) {
 		t.Fatal(err)
 	}
 	go func() {
-		if err := srv.Serve("veth0a", conn); err != nil {
+		if err := srv.Serve("veth2a", conn); err != nil {
 			t.Fatal(err)
 		}
 	}()
@@ -68,7 +68,7 @@ func TestRouterAdvertisement(t *testing.T) {
 		"--single",     // exit after first router advertisement
 		"--retry", "1", // retry only once
 		"--wait", "1000", // wait 1s
-		"veth0b")
+		"veth2b")
 	rdisc6.Stderr = os.Stderr
 	b, err := rdisc6.Output()
 	if err != nil {
