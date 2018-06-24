@@ -30,7 +30,7 @@ type Process struct {
 var dhcpActionRe = regexp.MustCompile(` (DHCP[^(]+\(.*)$`)
 
 // Run starts a dnsmasq(8) process and returns a handle to it.
-func Run(t *testing.T, args ...string) *Process {
+func Run(t *testing.T, iface string) *Process {
 	const ns = "ns0" // TODO: configurable?
 
 	ready, err := ioutil.TempFile("", "router7")
@@ -54,9 +54,9 @@ func Run(t *testing.T, args ...string) *Process {
 		"--log-facility=-",     // log to stderr
 		"--pid-file="+ready.Name(),
 		"--bind-interfaces",
-		"--interface=veth0b",
+		"--interface="+iface,
 		"--dhcp-range=192.168.23.2,192.168.23.10",
-		"--dhcp-range=::1,::10,constructor:veth0b",
+		"--dhcp-range=::1,::10,constructor:"+iface,
 		"--dhcp-authoritative", // eliminate timeouts
 		"--no-ping",            // disable ICMP confirmation of unused addresses to eliminate tedious timeout
 		"--leasefile-ro",       // do not create a lease database

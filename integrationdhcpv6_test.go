@@ -1,6 +1,7 @@
 package integration_test
 
 import (
+	"os"
 	"os/exec"
 	"regexp"
 	"strings"
@@ -23,27 +24,28 @@ func TestDHCPv6(t *testing.T) {
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
 	nsSetup := []*exec.Cmd{
-		exec.Command("ip", "link", "add", "veth0a", "type", "veth", "peer", "name", "veth0b", "netns", ns),
+		exec.Command("ip", "link", "add", "veth1a", "type", "veth", "peer", "name", "veth1b", "netns", ns),
 
 		// Disable Duplicate Address Detection: until DAD completes, the link-local
 		// address remains in state “tentative”, resulting in any attempts to
 		// bind(2) to the address to fail with -EADDRNOTAVAIL.
-		exec.Command("/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth0a/accept_dad"),
-		exec.Command("ip", "netns", "exec", ns, "/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth0b/accept_dad"),
+		exec.Command("/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth1a/accept_dad"),
+		exec.Command("ip", "netns", "exec", ns, "/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth1b/accept_dad"),
 
-		exec.Command("ip", "link", "set", "veth0a", "up"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "192.168.23.1/24", "dev", "veth0b"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "2001:db8::1/64", "dev", "veth0b"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth0b", "up"),
+		exec.Command("ip", "link", "set", "veth1a", "up"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "192.168.23.1/24", "dev", "veth1b"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "2001:db8::1/64", "dev", "veth1b"),
+		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth1b", "up"),
 	}
 
 	for _, cmd := range nsSetup {
+		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("%v: %v", cmd.Args, err)
 		}
 	}
 
-	dnsmasq := dnsmasq.Run(t)
+	dnsmasq := dnsmasq.Run(t, "veth1b")
 	defer dnsmasq.Kill()
 
 	// f, err := os.Create("/tmp/pcap6")
@@ -81,7 +83,7 @@ func TestDHCPv6(t *testing.T) {
 
 	duid := []byte{0x00, 0x0a, 0x00, 0x03, 0x00, 0x01, 0x4c, 0x5e, 0xc, 0x41, 0xbf, 0x39}
 	c, err := dhcp6.NewClient(dhcp6.ClientConfig{
-		InterfaceName: "veth0a",
+		InterfaceName: "veth1a",
 		DUID:          duid,
 	})
 	if err != nil {
@@ -105,11 +107,11 @@ func TestDHCPv6(t *testing.T) {
 		dnsmasq.Kill() // flush log
 		got := dnsmasq.Actions()
 		want := []string{
-			"DHCPSOLICIT(veth0b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
-			"DHCPADVERTISE(veth0b) 2001:db8::c 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
-			"DHCPREQUEST(veth0b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
-			"DHCPREPLY(veth0b) 2001:db8::c 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
-			"DHCPRELEASE(veth0b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
+			"DHCPSOLICIT(veth1b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
+			"DHCPADVERTISE(veth1b) 2001:db8::c 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
+			"DHCPREQUEST(veth1b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
+			"DHCPREPLY(veth1b) 2001:db8::c 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
+			"DHCPRELEASE(veth1b) 00:0a:00:03:00:01:4c:5e:0c:41:bf:39",
 		}
 		withoutMac := func(line string) string {
 			return v6AddrRe.ReplaceAllString(strings.TrimSpace(line), "")

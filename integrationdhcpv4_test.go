@@ -33,6 +33,7 @@ func TestDHCPv4(t *testing.T) {
 	}
 
 	for _, cmd := range nsSetup {
+		cmd.Stderr = os.Stderr
 		if err := cmd.Run(); err != nil {
 			t.Fatalf("%v: %v", cmd.Args, err)
 		}
@@ -45,7 +46,7 @@ func TestDHCPv4(t *testing.T) {
 	ready.Close()                 // dnsmasq will re-create the file anyway
 	defer os.Remove(ready.Name()) // dnsmasq does not clean up its pid file
 
-	dnsmasq := dnsmasq.Run(t)
+	dnsmasq := dnsmasq.Run(t, "veth0b")
 	defer dnsmasq.Kill()
 
 	// f, err := os.Create("/tmp/pcap")
