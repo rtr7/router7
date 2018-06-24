@@ -46,7 +46,8 @@ func logic() error {
 	if err := loadLeases(handler, "/perm/dhcp4d/leases.json"); err != nil {
 		return err
 	}
-	handler.Leases = func(leases []*dhcp4d.Lease) {
+	handler.Leases = func(leases []*dhcp4d.Lease, latest *dhcp4d.Lease) {
+		log.Printf("DHCPACK %+v", latest)
 		b, err := json.Marshal(leases)
 		if err != nil {
 			errs <- err

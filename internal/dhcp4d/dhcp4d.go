@@ -43,7 +43,7 @@ type Handler struct {
 	timeNow func() time.Time
 
 	// Leases is called whenever a new lease is handed out
-	Leases func([]*Lease)
+	Leases func([]*Lease, *Lease)
 }
 
 func NewHandler(dir string, iface *net.Interface, conn net.PacketConn) (*Handler, error) {
@@ -250,13 +250,12 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 
 		h.leasesIP[leaseNum] = lease
 		h.leasesHW[lease.HardwareAddr] = lease
-		log.Printf("handed out lease %+v (ip bytes: %#v)", lease, lease.Addr)
 		if h.Leases != nil {
 			var leases []*Lease
 			for _, l := range h.leasesIP {
 				leases = append(leases, l)
 			}
-			h.Leases(leases)
+			h.Leases(leases, lease)
 		}
 		return dhcp4.ReplyPacket(p, dhcp4.ACK, h.serverIP, reqIP, h.leasePeriod,
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))

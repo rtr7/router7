@@ -87,7 +87,7 @@ func TestLease(t *testing.T) {
 		hostname     = "xps"
 	)
 	leasedCalled := false
-	handler.Leases = func(leases []*Lease) {
+	handler.Leases = func(leases []*Lease, latest *Lease) {
 		if got, want := len(leases), 1; got != want {
 			t.Fatalf("unexpected number of leases: got %d, want %d", got, want)
 		}
