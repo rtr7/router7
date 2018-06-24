@@ -136,7 +136,7 @@ func TestNetconfig(t *testing.T) {
 
 		return
 	}
-	const ns = "ns1" // name of the network namespace to use for this test
+	const ns = "ns3" // name of the network namespace to use for this test
 
 	if err := exec.Command("ip", "netns", "add", ns).Run(); err != nil {
 		t.Fatalf("ip netns add %s: %v", ns, err)

@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"router7/internal/radvd"
 	"testing"
+
+	"github.com/google/go-cmp/cmp"
 )
 
 func TestRouterAdvertisement(t *testing.T) {
@@ -26,6 +28,7 @@ func TestRouterAdvertisement(t *testing.T) {
 		exec.Command("/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth2a/accept_dad"),
 		exec.Command("ip", "netns", "exec", ns, "/bin/sh", "-c", "echo 0 > /proc/sys/net/ipv6/conf/veth2b/accept_dad"),
 
+		exec.Command("ip", "link", "set", "veth2a", "address", "02:73:53:00:ca:fe"),
 		exec.Command("ip", "link", "set", "veth2a", "up"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "addr", "add", "192.168.23.1/24", "dev", "veth2b"),
 		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "veth2b", "up"),
@@ -74,6 +77,30 @@ func TestRouterAdvertisement(t *testing.T) {
 	if err != nil {
 		t.Fatalf("%v: %v (output: %v)", rdisc6.Args, err, string(b))
 	}
-	t.Logf("b = %s", string(b))
+	got := string(b)
+	want := `Soliciting ff02::2 (ff02::2) on veth2b...
 
+Hop limit                 :           64 (      0x40)
+Stateful address conf.    :          Yes
+Stateful other conf.      :           No
+Mobile home agent         :           No
+Router preference         :       medium
+Neighbor discovery proxy  :           No
+Router lifetime           :         1800 (0x00000708) seconds
+Reachable time            :  unspecified (0x00000000)
+Retransmit time           :  unspecified (0x00000000)
+ Recursive DNS server     : 2a02:168:4a00::1
+  DNS server lifetime     :         1800 (0x00000708) seconds
+ Prefix                   : 2a02:168:4a00::/64
+  On-link                 :          Yes
+  Autonomous address conf.:          Yes
+  Valid time              :         7200 (0x00001c20) seconds
+  Pref. time              :         1800 (0x00000708) seconds
+ MTU                      :         1500 bytes (valid)
+ Source link-layer address: 02:73:53:00:CA:FE
+ from fe80::73:53ff:fe00:cafe
+`
+	if diff := cmp.Diff(got, want); diff != "" {
+		t.Fatalf("unexpected rdisc6 output: diff (-got +want):\n%s", diff)
+	}
 }

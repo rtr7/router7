@@ -114,7 +114,6 @@ func TestDHCPv4(t *testing.T) {
 	}
 
 	cfg := c.Config()
-	t.Logf("cfg = %+v", cfg)
 	if got, want := cfg.Router, "192.168.23.1"; got != want {
 		t.Errorf("config: unexpected router: got %q, want %q", got, want)
 	}
