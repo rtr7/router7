@@ -175,10 +175,36 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 	s.prom.questions.Observe(float64(len(r.Question)))
 	if len(r.Question) == 1 { // TODO: answer all questions we can answer
 		q := r.Question[0]
+		if q.Qtype == dns.TypeAAAA && q.Qclass == dns.ClassINET {
+			if q.Name == "localhost." {
+				s.prom.upstream.WithLabelValues("local").Inc()
+				rr, err := dns.NewRR(q.Name + " 3600 IN AAAA ::1")
+				if err != nil {
+					log.Fatal(err)
+				}
+				m := new(dns.Msg)
+				m.SetReply(r)
+				m.Answer = append(m.Answer, rr)
+				w.WriteMsg(m)
+				return
+			}
+		}
 		if q.Qtype == dns.TypeA && q.Qclass == dns.ClassINET {
 			name := strings.TrimSuffix(q.Name, ".")
 			name = strings.TrimSuffix(name, "."+s.domain)
 
+			if q.Name == "localhost." {
+				s.prom.upstream.WithLabelValues("local").Inc()
+				rr, err := dns.NewRR(q.Name + " 3600 IN A 127.0.0.1")
+				if err != nil {
+					log.Fatal(err)
+				}
+				m := new(dns.Msg)
+				m.SetReply(r)
+				m.Answer = append(m.Answer, rr)
+				w.WriteMsg(m)
+				return
+			}
 			if !strings.Contains(name, ".") {
 				s.prom.upstream.WithLabelValues("local").Inc()
 				if host, ok := s.hostByName(name); ok {
@@ -205,6 +231,17 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 				s.prom.upstream.WithLabelValues("local").Inc()
 				if host, ok := s.hostByIP(q.Name); ok {
 					rr, err := dns.NewRR(q.Name + " 3600 IN PTR " + host + "." + s.domain)
+					if err != nil {
+						log.Fatal(err)
+					}
+					m := new(dns.Msg)
+					m.SetReply(r)
+					m.Answer = append(m.Answer, rr)
+					w.WriteMsg(m)
+					return
+				}
+				if strings.HasSuffix(q.Name, "127.in-addr.arpa.") {
+					rr, err := dns.NewRR(q.Name + " 3600 IN PTR localhost.")
 					if err != nil {
 						log.Fatal(err)
 					}
