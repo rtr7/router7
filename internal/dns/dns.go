@@ -1,3 +1,4 @@
+// Package dns implements a DNS forwarder.
 package dns
 
 import (

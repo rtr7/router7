@@ -1,3 +1,4 @@
+// Package notify implements sending signals (such as SIGUSR1) to processes.
 package notify
 
 import (

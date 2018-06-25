@@ -1,3 +1,4 @@
+// Binary random carries entropy across restarts.
 package main
 
 import (

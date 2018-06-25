@@ -1,3 +1,5 @@
+// Binary captured streams network packets to wireshark via SSH, replaying
+// buffered packets upon connection for retroactive debugging.
 package main
 
 import (

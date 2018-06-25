@@ -1,3 +1,4 @@
+// Package netconfig implements network configuration (interfaces, addresses, firewall rules, …).
 package netconfig
 
 import (
