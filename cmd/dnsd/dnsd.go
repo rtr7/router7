@@ -28,7 +28,7 @@ var (
 	dnsListeners  = multilisten.NewPool()
 )
 
-func updateListeners() error {
+func updateListeners(mux *miekgdns.ServeMux) error {
 	hosts, err := gokrazy.PrivateInterfaceAddrs()
 	if err != nil {
 		return err
@@ -39,7 +39,11 @@ func updateListeners() error {
 	})
 
 	dnsListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
-		return &listenerAdapter{&miekgdns.Server{Addr: net.JoinHostPort(host, "53"), Net: "udp"}}
+		return &listenerAdapter{&miekgdns.Server{
+			Addr:    net.JoinHostPort(host, "53"),
+			Net:     "udp",
+			Handler: mux,
+		}}
 	})
 	return nil
 }
@@ -73,11 +77,11 @@ func logic() error {
 		log.Printf("cannot resolve DHCP hostnames: %v", err)
 	}
 	http.Handle("/metrics", srv.PrometheusHandler())
-	updateListeners()
+	updateListeners(srv.Mux)
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
 	for range ch {
-		if err := updateListeners(); err != nil {
+		if err := updateListeners(srv.Mux); err != nil {
 			log.Printf("updateListeners: %v", err)
 		}
 		if err := readLeases(); err != nil {

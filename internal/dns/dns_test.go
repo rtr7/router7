@@ -33,7 +33,7 @@ func TestNXDOMAIN(t *testing.T) {
 	s := NewServer("localhost:0", "lan")
 	m := new(dns.Msg)
 	m.SetQuestion("foo.invalid.", dns.TypeA)
-	s.handleRequest(r, m)
+	s.Mux.ServeDNS(r, m)
 	if got, want := r.response.MsgHdr.Rcode, dns.RcodeNameError; got != want {
 		t.Fatalf("unexpected rcode: got %v, want %v", got, want)
 	}
@@ -45,7 +45,7 @@ func TestResolveError(t *testing.T) {
 	s.upstream = "266.266.266.266:53"
 	m := new(dns.Msg)
 	m.SetQuestion("foo.invalid.", dns.TypeA)
-	s.handleRequest(r, m)
+	s.Mux.ServeDNS(r, m)
 	if r.response != nil {
 		t.Fatalf("r.response unexpectedly not nil: %v", r.response)
 	}
@@ -64,7 +64,7 @@ func TestDHCP(t *testing.T) {
 	t.Run("xps.lan.", func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion("xps.lan.", dns.TypeA)
-		s.handleRequest(r, m)
+		s.Mux.ServeDNS(r, m)
 		if got, want := len(r.response.Answer), 1; got != want {
 			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
 		}
@@ -80,7 +80,7 @@ func TestDHCP(t *testing.T) {
 	t.Run("notfound.lan.", func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion("notfound.lan.", dns.TypeA)
-		s.handleRequest(r, m)
+		s.Mux.ServeDNS(r, m)
 		if got, want := r.response.Rcode, dns.RcodeNameError; got != want {
 			t.Fatalf("unexpected rcode: got %v, want %v", got, want)
 		}
@@ -99,7 +99,7 @@ func TestHostname(t *testing.T) {
 	t.Run("A", func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion(hostname+".lan.", dns.TypeA)
-		s.handleRequest(r, m)
+		s.Mux.ServeDNS(r, m)
 		if got, want := len(r.response.Answer), 1; got != want {
 			t.Fatalf("unexpected number of answers for %v: got %d, want %d", m.Question, got, want)
 		}
@@ -115,7 +115,7 @@ func TestHostname(t *testing.T) {
 	t.Run("PTR", func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion("2.0.0.127.in-addr.arpa.", dns.TypePTR)
-		s.handleRequest(r, m)
+		s.Mux.ServeDNS(r, m)
 		if got, want := len(r.response.Answer), 1; got != want {
 			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
 		}
@@ -136,7 +136,7 @@ func TestLocalhost(t *testing.T) {
 	t.Run("A", func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion("localhost.", dns.TypeA)
-		s.handleRequest(r, m)
+		s.Mux.ServeDNS(r, m)
 		if got, want := len(r.response.Answer), 1; got != want {
 			t.Fatalf("unexpected number of answers for %v: got %d, want %d", m.Question, got, want)
 		}
@@ -152,7 +152,7 @@ func TestLocalhost(t *testing.T) {
 	t.Run("AAAA", func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion("localhost.", dns.TypeAAAA)
-		s.handleRequest(r, m)
+		s.Mux.ServeDNS(r, m)
 		if got, want := len(r.response.Answer), 1; got != want {
 			t.Fatalf("unexpected number of answers for %v: got %d, want %d", m.Question, got, want)
 		}
@@ -168,7 +168,7 @@ func TestLocalhost(t *testing.T) {
 	t.Run("PTR", func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion("1.0.0.127.in-addr.arpa.", dns.TypePTR)
-		s.handleRequest(r, m)
+		s.Mux.ServeDNS(r, m)
 		if got, want := len(r.response.Answer), 1; got != want {
 			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
 		}
@@ -218,7 +218,7 @@ func TestDHCPReverse(t *testing.T) {
 			})
 			m := new(dns.Msg)
 			m.SetQuestion(test.question, dns.TypePTR)
-			s.handleRequest(r, m)
+			s.Mux.ServeDNS(r, m)
 			if got, want := len(r.response.Answer), 1; got != want {
 				t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
 			}
@@ -237,7 +237,7 @@ func TestDHCPReverse(t *testing.T) {
 		s := NewServer("localhost:0", "lan")
 		m := new(dns.Msg)
 		m.SetQuestion("254.255.31.172.in-addr.arpa.", dns.TypePTR)
-		s.handleRequest(r, m)
+		s.Mux.ServeDNS(r, m)
 		if got, want := r.response.Rcode, dns.RcodeNameError; got != want {
 			t.Fatalf("unexpected rcode: got %v, want %v", got, want)
 		}

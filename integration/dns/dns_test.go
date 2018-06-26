@@ -13,8 +13,8 @@ import (
 )
 
 func TestDNS(t *testing.T) {
-	dns.NewServer("localhost:4453", "lan")
-	s := &miekgdns.Server{Addr: "localhost:4453", Net: "udp"}
+	srv := dns.NewServer("localhost:4453", "lan")
+	s := &miekgdns.Server{Addr: "localhost:4453", Net: "udp", Handler: srv.Mux}
 	go s.ListenAndServe()
 	const port = 4453
 	dig := exec.Command("dig", "-p", strconv.Itoa(port), "+timeout=1", "+short", "-x", "8.8.8.8", "@127.0.0.1")

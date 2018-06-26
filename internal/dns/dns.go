@@ -19,6 +19,8 @@ import (
 )
 
 type Server struct {
+	Mux *dns.ServeMux
+
 	client    *dns.Client
 	domain    string
 	upstream  string
@@ -40,6 +42,7 @@ func NewServer(addr, domain string) *Server {
 	hostname, _ := os.Hostname()
 	ip, _, _ := net.SplitHostPort(addr)
 	server := &Server{
+		Mux:       dns.NewServeMux(),
 		client:    &dns.Client{},
 		domain:    domain,
 		upstream:  "8.8.8.8:53",
@@ -73,7 +76,9 @@ func NewServer(addr, domain string) *Server {
 
 	server.prom.registry.MustRegister(prometheus.NewGoCollector())
 	server.initHostsLocked()
-	dns.HandleFunc(".", server.handleRequest)
+	server.Mux.HandleFunc(".", server.handleRequest)
+	server.Mux.HandleFunc("lan.", server.handleInternal)
+	server.Mux.HandleFunc("localhost.", server.handleInternal)
 	return server
 }
 
@@ -167,98 +172,73 @@ func isLocalInAddrArpa(q string) bool {
 	return local
 }
 
-// TODO: require search domains to be present, then use HandleFunc("lan.", internalName)
-// TODO: add test for non-A records on internal names, they should not go upstream
-func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
-	s.prom.queries.Inc()
-	s.prom.questions.Observe(float64(len(r.Question)))
-	if len(r.Question) == 1 { // TODO: answer all questions we can answer
-		q := r.Question[0]
-		if q.Qtype == dns.TypeAAAA && q.Qclass == dns.ClassINET {
-			if q.Name == "localhost." {
-				s.prom.upstream.WithLabelValues("local").Inc()
-				rr, err := dns.NewRR(q.Name + " 3600 IN AAAA ::1")
-				if err != nil {
-					log.Fatal(err)
-				}
-				m := new(dns.Msg)
-				m.SetReply(r)
-				m.Answer = append(m.Answer, rr)
-				w.WriteMsg(m)
-				return
-			}
+func (s *Server) resolve(q dns.Question) (dns.RR, error) {
+	if q.Qclass != dns.ClassINET {
+		return nil, nil
+	}
+	if q.Name == "localhost." {
+		if q.Qtype == dns.TypeAAAA {
+			return dns.NewRR(q.Name + " 3600 IN AAAA ::1")
 		}
-		if q.Qtype == dns.TypeA && q.Qclass == dns.ClassINET {
-			name := strings.TrimSuffix(q.Name, ".")
-			name = strings.TrimSuffix(name, "."+s.domain)
-
-			if q.Name == "localhost." {
-				s.prom.upstream.WithLabelValues("local").Inc()
-				rr, err := dns.NewRR(q.Name + " 3600 IN A 127.0.0.1")
-				if err != nil {
-					log.Fatal(err)
-				}
-				m := new(dns.Msg)
-				m.SetReply(r)
-				m.Answer = append(m.Answer, rr)
-				w.WriteMsg(m)
-				return
-			}
-			if !strings.Contains(name, ".") {
-				s.prom.upstream.WithLabelValues("local").Inc()
-				if host, ok := s.hostByName(name); ok {
-					rr, err := dns.NewRR(q.Name + " 3600 IN A " + host)
-					if err != nil {
-						log.Fatal(err)
-					}
-					m := new(dns.Msg)
-					m.SetReply(r)
-					m.Answer = append(m.Answer, rr)
-					w.WriteMsg(m)
-					return
-				}
-				// Send an authoritative NXDOMAIN for local names:
-				m := new(dns.Msg)
-				m.SetReply(r)
-				m.SetRcode(r, dns.RcodeNameError)
-				w.WriteMsg(m)
-				return
-			}
-		}
-		if q.Qtype == dns.TypePTR && q.Qclass == dns.ClassINET {
-			if isLocalInAddrArpa(q.Name) {
-				s.prom.upstream.WithLabelValues("local").Inc()
-				if host, ok := s.hostByIP(q.Name); ok {
-					rr, err := dns.NewRR(q.Name + " 3600 IN PTR " + host + "." + s.domain)
-					if err != nil {
-						log.Fatal(err)
-					}
-					m := new(dns.Msg)
-					m.SetReply(r)
-					m.Answer = append(m.Answer, rr)
-					w.WriteMsg(m)
-					return
-				}
-				if strings.HasSuffix(q.Name, "127.in-addr.arpa.") {
-					rr, err := dns.NewRR(q.Name + " 3600 IN PTR localhost.")
-					if err != nil {
-						log.Fatal(err)
-					}
-					m := new(dns.Msg)
-					m.SetReply(r)
-					m.Answer = append(m.Answer, rr)
-					w.WriteMsg(m)
-					return
-				}
-				// Send an authoritative NXDOMAIN for local names:
-				m := new(dns.Msg)
-				m.SetReply(r)
-				m.SetRcode(r, dns.RcodeNameError)
-				w.WriteMsg(m)
-				return
-			}
+		if q.Qtype == dns.TypeA {
+			return dns.NewRR(q.Name + " 3600 IN A 127.0.0.1")
 		}
 	}
+	if q.Qtype == dns.TypeA {
+		name := strings.TrimSuffix(q.Name, ".")
+		name = strings.TrimSuffix(name, "."+s.domain)
+		if host, ok := s.hostByName(name); ok {
+			return dns.NewRR(q.Name + " 3600 IN A " + host)
+		}
+	}
+	if q.Qtype == dns.TypePTR {
+		if host, ok := s.hostByIP(q.Name); ok {
+			return dns.NewRR(q.Name + " 3600 IN PTR " + host + "." + s.domain)
+		}
+		if strings.HasSuffix(q.Name, "127.in-addr.arpa.") {
+			return dns.NewRR(q.Name + " 3600 IN PTR localhost.")
+		}
+	}
+	return nil, nil
+}
+
+func (s *Server) handleInternal(w dns.ResponseWriter, r *dns.Msg) {
+	s.prom.queries.Inc()
+	s.prom.questions.Observe(float64(len(r.Question)))
+	s.prom.upstream.WithLabelValues("local").Inc()
+	if len(r.Question) != 1 { // TODO: answer all questions we can answer
+		return
+	}
+	rr, err := s.resolve(r.Question[0])
+	if err != nil {
+		log.Fatal(err)
+	}
+	if rr != nil {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.Answer = append(m.Answer, rr)
+		w.WriteMsg(m)
+		return
+	}
+	// Send an authoritative NXDOMAIN for local names:
+	m := new(dns.Msg)
+	m.SetReply(r)
+	m.SetRcode(r, dns.RcodeNameError)
+	w.WriteMsg(m)
+}
+
+func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
+	if len(r.Question) == 1 { // TODO: answer all questions we can answer
+		q := r.Question[0]
+		if q.Qtype == dns.TypePTR && q.Qclass == dns.ClassINET && isLocalInAddrArpa(q.Name) {
+			s.handleInternal(w, r)
+			return
+		}
+	}
+
+	s.prom.queries.Inc()
+	s.prom.questions.Observe(float64(len(r.Question)))
+	s.prom.upstream.WithLabelValues("DNS").Inc()
 
 	in, _, err := s.client.Exchange(r, s.upstream)
 	if err != nil {
@@ -268,5 +248,4 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 		return // DNS has no reply for resolving errors
 	}
 	w.WriteMsg(in)
-	s.prom.upstream.WithLabelValues("DNS").Inc()
 }
