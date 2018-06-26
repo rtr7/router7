@@ -34,10 +34,6 @@ func updateListeners(mux *miekgdns.ServeMux) error {
 		return err
 	}
 
-	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
-		return &http.Server{Addr: net.JoinHostPort(host, "8053")}
-	})
-
 	dnsListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
 		return &listenerAdapter{&miekgdns.Server{
 			Addr:    net.JoinHostPort(host, "53"),
@@ -45,6 +41,15 @@ func updateListeners(mux *miekgdns.ServeMux) error {
 			Handler: mux,
 		}}
 	})
+
+	if net1, err := multilisten.IPv6Net1("/perm"); err == nil {
+		hosts = append(hosts, net1)
+	}
+
+	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return &http.Server{Addr: net.JoinHostPort(host, "8053")}
+	})
+
 	return nil
 }
 
