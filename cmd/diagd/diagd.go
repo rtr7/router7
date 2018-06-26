@@ -7,11 +7,32 @@ import (
 	"html"
 	"io"
 	"log"
+	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
+
+	"github.com/gokrazy/gokrazy"
 
 	"router7/internal/diag"
+	"router7/internal/multilisten"
 )
+
+var httpListeners = multilisten.NewPool()
+
+func updateListeners() error {
+	hosts, err := gokrazy.PrivateInterfaceAddrs()
+	if err != nil {
+		return err
+	}
+
+	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return &http.Server{Addr: net.JoinHostPort(host, "7733")}
+	})
+	return nil
+}
 
 func dump(w io.Writer, re *diag.EvalResult) {
 	symbol := "✔"
@@ -50,8 +71,15 @@ func logic() error {
 		fmt.Fprintf(w, `<!DOCTYPE html><style type="text/css">ul { list-style-type: none; }</style><ul>`)
 		dump(w, re)
 	})
-	// TODO: only listen on private IP addresses
-	return http.ListenAndServe(":7733", nil)
+	updateListeners()
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGUSR1)
+	for range ch {
+		if err := updateListeners(); err != nil {
+			log.Printf("updateListeners: %v", err)
+		}
+	}
+	return nil
 }
 
 func main() {
