@@ -143,7 +143,7 @@ func (o prefixInfo) Marshal() layers.ICMPv6Option {
 
 type rdnss struct {
 	lifetime uint32 // seconds
-	server   [16]byte
+	server   []byte
 }
 
 func (o rdnss) Marshal() layers.ICMPv6Option {
@@ -156,6 +156,14 @@ func (o rdnss) Marshal() layers.ICMPv6Option {
 		Data: buf,
 	}
 }
+
+var ipv6LinkLocal = func(cidr string) *net.IPNet {
+	_, net, err := net.ParseCIDR(cidr)
+	if err != nil {
+		panic(err)
+	}
+	return net
+}("fe80::/10")
 
 func (s *Server) sendAdvertisement(addr net.Addr) error {
 	if s.prefixes == nil {
@@ -196,16 +204,27 @@ func (s *Server) sendAdvertisement(addr net.Addr) error {
 		}).Marshal())
 	}
 	if len(s.prefixes) > 0 {
-		prefix := s.prefixes[0]
-		var server [16]byte
-		copy(server[:], prefix.IP)
-		// pick the first address of the prefix, e.g. address 2a02:168:4a00::1
-		// for prefix 2a02:168:4a00::/48
-		server[len(server)-1] = 1
-		options = append(options, (rdnss{
-			lifetime: 1800, // seconds
-			server:   server,
-		}).Marshal())
+		addrs, err := s.iface.Addrs()
+		if err != nil {
+			return err
+		}
+		var linkLocal net.IP
+		for _, addr := range addrs {
+			ipnet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+			if ipv6LinkLocal.Contains(ipnet.IP) {
+				linkLocal = ipnet.IP
+				break
+			}
+		}
+		if !linkLocal.Equal(net.IPv6zero) {
+			options = append(options, (rdnss{
+				lifetime: 1800, // seconds
+				server:   linkLocal,
+			}).Marshal())
+		}
 	}
 	s.mu.Unlock()
 

@@ -89,7 +89,7 @@ Neighbor discovery proxy  :           No
 Router lifetime           :         1800 (0x00000708) seconds
 Reachable time            :  unspecified (0x00000000)
 Retransmit time           :  unspecified (0x00000000)
- Recursive DNS server     : 2a02:168:4a00::1
+ Recursive DNS server     : fe80::73:53ff:fe00:cafe
   DNS server lifetime     :         1800 (0x00000708) seconds
  Prefix                   : 2a02:168:4a00::/64
   On-link                 :          Yes
