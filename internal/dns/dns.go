@@ -19,7 +19,6 @@ import (
 )
 
 type Server struct {
-	*dns.Server
 	client    *dns.Client
 	domain    string
 	upstream  string
@@ -41,7 +40,6 @@ func NewServer(addr, domain string) *Server {
 	hostname, _ := os.Hostname()
 	ip, _, _ := net.SplitHostPort(addr)
 	server := &Server{
-		Server:    &dns.Server{Addr: addr, Net: "udp"},
 		client:    &dns.Client{},
 		domain:    domain,
 		upstream:  "8.8.8.8:53",
@@ -170,6 +168,7 @@ func isLocalInAddrArpa(q string) bool {
 }
 
 // TODO: require search domains to be present, then use HandleFunc("lan.", internalName)
+// TODO: add test for non-A records on internal names, they should not go upstream
 func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 	s.prom.queries.Inc()
 	s.prom.questions.Observe(float64(len(r.Question)))

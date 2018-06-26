@@ -3,6 +3,7 @@ package main
 
 import (
 	"flag"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -89,6 +90,8 @@ func init() {
 	}
 }
 
+var httpListeners = multilisten.NewPool()
+
 func updateListeners() error {
 	hosts, err := gokrazy.PrivateInterfaceAddrs()
 	if err != nil {
@@ -98,7 +101,10 @@ func updateListeners() error {
 		hosts = append(hosts, net1)
 	}
 
-	return multilisten.ListenAndServe(hosts, "8066", http.DefaultServeMux)
+	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return &http.Server{Addr: net.JoinHostPort(host, "8066")}
+	})
+	return nil
 }
 
 func logic() error {

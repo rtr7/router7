@@ -8,10 +8,14 @@ import (
 	"testing"
 
 	"router7/internal/dns"
+
+	miekgdns "github.com/miekg/dns"
 )
 
 func TestDNS(t *testing.T) {
-	go dns.NewServer("localhost:4453", "lan").ListenAndServe()
+	dns.NewServer("localhost:4453", "lan")
+	s := &miekgdns.Server{Addr: "localhost:4453", Net: "udp"}
+	go s.ListenAndServe()
 	const port = 4453
 	dig := exec.Command("dig", "-p", strconv.Itoa(port), "+timeout=1", "+short", "-x", "8.8.8.8", "@127.0.0.1")
 	dig.Stderr = os.Stderr

@@ -6,12 +6,14 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 
 	"github.com/gokrazy/gokrazy"
+	miekgdns "github.com/miekg/dns"
 
 	"router7/internal/dhcp4d"
 	"router7/internal/dns"
@@ -21,17 +23,32 @@ import (
 	_ "net/http/pprof"
 )
 
+var (
+	httpListeners = multilisten.NewPool()
+	dnsListeners  = multilisten.NewPool()
+)
+
 func updateListeners() error {
 	hosts, err := gokrazy.PrivateInterfaceAddrs()
 	if err != nil {
 		return err
 	}
-	if net1, err := multilisten.IPv6Net1("/perm"); err == nil {
-		hosts = append(hosts, net1)
-	}
 
-	return multilisten.ListenAndServe(hosts, "8053", http.DefaultServeMux)
+	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return &http.Server{Addr: net.JoinHostPort(host, "8053")}
+	})
+
+	dnsListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return &listenerAdapter{&miekgdns.Server{Addr: net.JoinHostPort(host, "53"), Net: "udp"}}
+	})
+	return nil
 }
+
+type listenerAdapter struct {
+	*miekgdns.Server
+}
+
+func (a *listenerAdapter) Close() error { return a.Shutdown() }
 
 func logic() error {
 	// TODO: set correct upstream DNS resolver(s)
@@ -59,17 +76,15 @@ func logic() error {
 	updateListeners()
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
-	go func() {
-		for range ch {
-			if err := updateListeners(); err != nil {
-				log.Printf("updateListeners: %v", err)
-			}
-			if err := readLeases(); err != nil {
-				log.Printf("readLeases: %v", err)
-			}
+	for range ch {
+		if err := updateListeners(); err != nil {
+			log.Printf("updateListeners: %v", err)
 		}
-	}()
-	return srv.ListenAndServe()
+		if err := readLeases(); err != nil {
+			log.Printf("readLeases: %v", err)
+		}
+	}
+	return nil
 }
 
 func main() {
