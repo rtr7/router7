@@ -2,6 +2,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"html"
@@ -46,6 +47,18 @@ func dump(w io.Writer, re *diag.EvalResult) {
 	fmt.Fprintf(w, "</ul></li>")
 }
 
+func firstError(re *diag.EvalResult) string {
+	if re.Error {
+		return fmt.Sprintf("%s: %s", re.Name, re.Status)
+	}
+	for _, ch := range re.Children {
+		if msg := firstError(ch); msg != "" {
+			return msg
+		}
+	}
+	return ""
+}
+
 func logic() error {
 	const (
 		uplink        = "uplink0" /* enp0s31f6 */
@@ -70,6 +83,22 @@ func logic() error {
 		mu.Unlock()
 		fmt.Fprintf(w, `<!DOCTYPE html><style type="text/css">ul { list-style-type: none; }</style><ul>`)
 		dump(w, re)
+	})
+	http.HandleFunc("/health.json", func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		re := m.Evaluate()
+		mu.Unlock()
+		reply := struct {
+			FirstError string `json:"first_error"`
+		}{
+			FirstError: firstError(re),
+		}
+		b, err := json.Marshal(&reply)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		w.Write(b)
 	})
 	updateListeners()
 	ch := make(chan os.Signal, 1)
