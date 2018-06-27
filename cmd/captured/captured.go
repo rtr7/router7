@@ -7,13 +7,17 @@ import (
 	"context"
 	"flag"
 	"log"
+	"os"
+	"os/signal"
 	"sync"
+	"syscall"
 
+	"router7/internal/multilisten"
+
+	"github.com/gokrazy/gokrazy"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
-
-	"golang.org/x/sync/errgroup"
 
 	_ "net/http/pprof"
 )
@@ -79,23 +83,48 @@ func (prb *packetRingBuffer) packetsLocked() []gopacket.Packet {
 	return packets
 }
 
+var sshListeners = multilisten.NewPool()
+
+func updateListeners(srv *server) error {
+	hosts, err := gokrazy.PrivateInterfaceAddrs()
+	if err != nil {
+		return err
+	}
+
+	sshListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return srv.listenerFor(host)
+	})
+	return nil
+}
+
 func logic() error {
 	prb := newPacketRingBuffer(50000)
+	srv, err := newServer(prb)
+	if err != nil {
+		return err
+	}
+	if err := updateListeners(srv); err != nil {
+		return err
+	}
 
-	var eg errgroup.Group
-	eg.Go(func() error { return listenAndServe(prb) })
-	eg.Go(func() error {
-		packets, err := capturePackets(context.Background())
-		if err != nil {
-			return err
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGUSR1)
+		for range ch {
+			if err := updateListeners(srv); err != nil {
+				log.Printf("updateListeners: %v", err)
+			}
 		}
-		for packet := range packets {
-			prb.writePacket(packet)
-		}
-		return nil
-	})
+	}()
 
-	return eg.Wait()
+	packets, err := capturePackets(context.Background())
+	if err != nil {
+		return err
+	}
+	for packet := range packets {
+		prb.writePacket(packet)
+	}
+	return nil
 }
 
 func main() {

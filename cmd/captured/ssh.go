@@ -7,7 +7,6 @@ import (
 	"log"
 	"net"
 
-	"github.com/gokrazy/gokrazy"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
 	"golang.org/x/crypto/ssh"
@@ -104,7 +103,12 @@ func loadHostKey(path string) (ssh.Signer, error) {
 	return ssh.ParsePrivateKey(b)
 }
 
-func listenAndServe(prb *packetRingBuffer) error {
+type server struct {
+	config *ssh.ServerConfig
+	prb    *packetRingBuffer
+}
+
+func newServer(prb *packetRingBuffer) (*server, error) {
 	config := &ssh.ServerConfig{
 		PublicKeyCallback: func(conn ssh.ConnMetadata, pubKey ssh.PublicKey) (*ssh.Permissions, error) {
 			return nil, nil // authorize all users
@@ -113,53 +117,56 @@ func listenAndServe(prb *packetRingBuffer) error {
 
 	signer, err := loadHostKey(*hostKeyPath)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	config.AddHostKey(signer)
 
-	accept := func(listener net.Listener) {
-		for {
-			conn, err := listener.Accept()
-			if err != nil {
-				log.Printf("accept: %v", err)
-				continue
-			}
+	return &server{
+		config: config,
+		prb:    prb,
+	}, nil
+}
 
-			go func(conn net.Conn) {
-				_, chans, reqs, err := ssh.NewServerConn(conn, config)
-				if err != nil {
-					log.Printf("handshake: %v", err)
-					return
-				}
+func (s *server) listenerFor(host string) *serverListener {
+	return &serverListener{srv: s, host: host}
+}
 
-				// discard all out of band requests
-				go ssh.DiscardRequests(reqs)
+type serverListener struct {
+	srv  *server
+	host string
+	ln   net.Listener
+}
 
-				for newChannel := range chans {
-					handleChannel(newChannel, prb)
-				}
-			}(conn)
-		}
-	}
-
-	addrs, err := gokrazy.PrivateInterfaceAddrs()
+func (sl *serverListener) ListenAndServe() error {
+	ln, err := net.Listen("tcp", net.JoinHostPort(sl.host, "5022"))
 	if err != nil {
 		return err
 	}
-
-	for _, addr := range addrs {
-		hostport := net.JoinHostPort(addr, "5022")
-		listener, err := net.Listen("tcp", hostport)
+	sl.ln = ln
+	for {
+		conn, err := ln.Accept()
 		if err != nil {
 			return err
 		}
-		fmt.Printf("listening on %s\n", hostport)
-		go accept(listener)
+
+		go func(conn net.Conn) {
+			_, chans, reqs, err := ssh.NewServerConn(conn, sl.srv.config)
+			if err != nil {
+				log.Printf("handshake: %v", err)
+				return
+			}
+
+			// discard all out of band requests
+			go ssh.DiscardRequests(reqs)
+
+			for newChannel := range chans {
+				handleChannel(newChannel, sl.srv.prb)
+			}
+		}(conn)
 	}
-
-	fmt.Printf("host key fingerprint: %s\n", ssh.FingerprintSHA256(signer.PublicKey()))
-
-	select {}
-
 	return nil
+}
+
+func (sl *serverListener) Close() error {
+	return sl.ln.Close()
 }

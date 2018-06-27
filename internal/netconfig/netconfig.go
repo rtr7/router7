@@ -600,10 +600,11 @@ func Apply(dir, root string) error {
 	}
 
 	for _, process := range []string{
-		"dyndns",  // depends on the public IPv4 address
-		"dnsd",    // listens on private IPv4/IPv6
-		"diagd",   // listens on private IPv4/IPv6
-		"backupd", // listens on private IPv4/IPv6
+		"dyndns",   // depends on the public IPv4 address
+		"dnsd",     // listens on private IPv4/IPv6
+		"diagd",    // listens on private IPv4/IPv6
+		"backupd",  // listens on private IPv4/IPv6
+		"captured", // listens on private IPv4/IPv6
 	} {
 		if err := notify.Process("/user/"+process, syscall.SIGUSR1); err != nil {
 			log.Printf("notifying %s: %v", process, err)
