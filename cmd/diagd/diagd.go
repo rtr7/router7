@@ -100,7 +100,9 @@ func logic() error {
 		}
 		w.Write(b)
 	})
-	updateListeners()
+	if err := updateListeners(); err != nil {
+		return err
+	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
 	for range ch {

@@ -110,7 +110,9 @@ func updateListeners() error {
 func logic() error {
 	if *linger {
 		http.Handle("/metrics", promhttp.Handler())
-		updateListeners()
+		if err := updateListeners(); err != nil {
+			return err
+		}
 	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)

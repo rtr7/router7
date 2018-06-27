@@ -82,7 +82,9 @@ func logic() error {
 		log.Printf("cannot resolve DHCP hostnames: %v", err)
 	}
 	http.Handle("/metrics", srv.PrometheusHandler())
-	updateListeners(srv.Mux)
+	if err := updateListeners(srv.Mux); err != nil {
+		return err
+	}
 	ch := make(chan os.Signal, 1)
 	signal.Notify(ch, syscall.SIGUSR1)
 	for range ch {
