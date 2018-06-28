@@ -128,7 +128,6 @@ func TestNetconfig(t *testing.T) {
 		}
 
 		netconfig.DefaultCounter = expr.Counter{Packets: 23, Bytes: 42}
-
 		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
 			t.Fatalf("netconfig.Apply: %v", err)
 		}
@@ -136,6 +135,7 @@ func TestNetconfig(t *testing.T) {
 		// Apply twice to ensure the absence of errors when dealing with
 		// already-configured interfaces, addresses, routes, … (and ensure
 		// nftables rules are replaced, not appendend to).
+		netconfig.DefaultCounter = expr.Counter{Packets: 0, Bytes: 0}
 		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
 			t.Fatalf("netconfig.Apply: %v", err)
 		}
