@@ -266,6 +266,7 @@ func (c *Client) request(advertise dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6,
 }
 
 func (c *Client) ObtainOrRenew() bool {
+	c.err = nil // clear previous error
 	_, advertise, err := c.solicit(nil)
 	if err != nil {
 		c.err = err
