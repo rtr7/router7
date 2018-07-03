@@ -208,7 +208,7 @@ func (c *Client) sendReceive(packet dhcpv6.DHCPv6, expectedType dhcpv6.MessageTy
 			// XXX should this unpack relay messages and check the XID of the
 			// inner packet too?
 			if msg.TransactionID() != recvMsg.TransactionID() {
-				log.Printf("different XID")
+				log.Printf("different XID: got %v, want %v", recvMsg.TransactionID(), msg.TransactionID())
 				// different XID, we don't want this packet for sure
 				continue
 			}
