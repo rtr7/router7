@@ -78,7 +78,7 @@ func (c *Client) ObtainOrRenew() bool {
 		}
 		dhcp, err := dhcp4client.New(
 			dhcp4client.HardwareAddr(c.hardwareAddr),
-			dhcp4client.Timeout(5*time.Second),
+			dhcp4client.Timeout(10*time.Second),
 			dhcp4client.Broadcast(false),
 			dhcp4client.Connection(c.connection),
 			dhcp4client.GenerateXID(c.generateXID),
