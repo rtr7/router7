@@ -19,8 +19,9 @@ import (
 	"net"
 	"os"
 	"os/exec"
-	"router7/internal/radvd"
 	"testing"
+
+	"github.com/rtr7/router7/internal/radvd"
 
 	"github.com/google/go-cmp/cmp"
 )

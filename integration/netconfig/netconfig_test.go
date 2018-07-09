@@ -21,9 +21,10 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
-	"router7/internal/netconfig"
 	"strings"
 	"testing"
+
+	"github.com/rtr7/router7/internal/netconfig"
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/nftables/expr"

@@ -20,10 +20,11 @@ import (
 	"io/ioutil"
 	"os"
 	"os/signal"
-	"router7/internal/teelogger"
 	"syscall"
 	"time"
 	"unsafe"
+
+	"github.com/rtr7/router7/internal/teelogger"
 
 	"golang.org/x/sys/unix"
 )

@@ -21,8 +21,8 @@ import (
 	"strings"
 	"testing"
 
-	"router7/internal/dhcp6"
-	"router7/internal/testing/dnsmasq"
+	"github.com/rtr7/router7/internal/dhcp6"
+	"github.com/rtr7/router7/internal/testing/dnsmasq"
 
 	"github.com/google/go-cmp/cmp"
 )

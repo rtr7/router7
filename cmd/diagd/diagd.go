@@ -31,8 +31,8 @@ import (
 
 	"github.com/gokrazy/gokrazy"
 
-	"router7/internal/diag"
-	"router7/internal/multilisten"
+	"github.com/rtr7/router7/internal/diag"
+	"github.com/rtr7/router7/internal/multilisten"
 )
 
 var httpListeners = multilisten.NewPool()

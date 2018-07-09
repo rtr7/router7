@@ -15,9 +15,10 @@
 package dnsmasq_test
 
 import (
-	"router7/internal/testing/dnsmasq"
 	"strings"
 	"testing"
+
+	"github.com/rtr7/router7/internal/testing/dnsmasq"
 
 	"github.com/google/go-cmp/cmp"
 )

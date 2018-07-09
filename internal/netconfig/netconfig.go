@@ -33,10 +33,10 @@ import (
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
-	"router7/internal/dhcp4"
-	"router7/internal/dhcp6"
-	"router7/internal/notify"
-	"router7/internal/teelogger"
+	"github.com/rtr7/router7/internal/dhcp4"
+	"github.com/rtr7/router7/internal/dhcp6"
+	"github.com/rtr7/router7/internal/notify"
+	"github.com/rtr7/router7/internal/teelogger"
 )
 
 var log = teelogger.NewConsole()

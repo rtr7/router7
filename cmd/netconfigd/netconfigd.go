@@ -30,9 +30,9 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"router7/internal/multilisten"
-	"router7/internal/netconfig"
-	"router7/internal/teelogger"
+	"github.com/rtr7/router7/internal/multilisten"
+	"github.com/rtr7/router7/internal/netconfig"
+	"github.com/rtr7/router7/internal/teelogger"
 )
 
 var log = teelogger.NewConsole()

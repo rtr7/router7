@@ -23,7 +23,7 @@ import (
 	"syscall"
 	"time"
 
-	"router7/internal/netconfig"
+	"github.com/rtr7/router7/internal/netconfig"
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"

@@ -21,7 +21,7 @@ import (
 	"strings"
 	"testing"
 
-	"router7/internal/dns"
+	"github.com/rtr7/router7/internal/dns"
 
 	miekgdns "github.com/miekg/dns"
 )

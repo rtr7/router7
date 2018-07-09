@@ -18,8 +18,9 @@ import (
 	"bytes"
 	"net"
 	"os"
-	"router7/internal/dhcp4d"
 	"testing"
+
+	"github.com/rtr7/router7/internal/dhcp4d"
 
 	"github.com/miekg/dns"
 )

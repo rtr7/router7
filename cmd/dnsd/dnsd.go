@@ -29,10 +29,10 @@ import (
 	"github.com/gokrazy/gokrazy"
 	miekgdns "github.com/miekg/dns"
 
-	"router7/internal/dhcp4d"
-	"router7/internal/dns"
-	"router7/internal/multilisten"
-	"router7/internal/netconfig"
+	"github.com/rtr7/router7/internal/dhcp4d"
+	"github.com/rtr7/router7/internal/dns"
+	"github.com/rtr7/router7/internal/multilisten"
+	"github.com/rtr7/router7/internal/netconfig"
 
 	_ "net/http/pprof"
 )

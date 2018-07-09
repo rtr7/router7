@@ -24,8 +24,8 @@ import (
 	"os/signal"
 	"syscall"
 
-	"router7/internal/dhcp6"
-	"router7/internal/radvd"
+	"github.com/rtr7/router7/internal/dhcp6"
+	"github.com/rtr7/router7/internal/radvd"
 )
 
 func logic() error {

@@ -22,9 +22,9 @@ import (
 	"os"
 	"syscall"
 
-	"router7/internal/dhcp4d"
-	"router7/internal/notify"
-	"router7/internal/teelogger"
+	"github.com/rtr7/router7/internal/dhcp4d"
+	"github.com/rtr7/router7/internal/notify"
+	"github.com/rtr7/router7/internal/teelogger"
 
 	"github.com/krolaw/dhcp4"
 	"github.com/krolaw/dhcp4/conn"

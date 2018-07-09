@@ -20,8 +20,9 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"router7/internal/backup"
 	"testing"
+
+	"github.com/rtr7/router7/internal/backup"
 )
 
 func TestArchive(t *testing.T) {

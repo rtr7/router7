@@ -24,7 +24,7 @@ import (
 	"sync"
 	"time"
 
-	"router7/internal/dhcp4d"
+	"github.com/rtr7/router7/internal/dhcp4d"
 
 	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"

@@ -21,8 +21,9 @@ import (
 	"io/ioutil"
 	"log"
 	"path/filepath"
-	"router7/internal/dhcp6"
 	"sync"
+
+	"github.com/rtr7/router7/internal/dhcp6"
 )
 
 type Listener interface {
