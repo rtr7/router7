@@ -32,8 +32,10 @@ import (
 func TestDHCPv4(t *testing.T) {
 	const ns = "ns0" // name of the network namespace to use for this test
 
-	if err := exec.Command("ip", "netns", "add", ns).Run(); err != nil {
-		t.Fatalf("ip netns add %s: %v", ns, err)
+	add := exec.Command("ip", "netns", "add", ns)
+	add.Stderr = os.Stderr
+	if err := add.Run(); err != nil {
+		t.Fatalf("%v: %v", add.Args, err)
 	}
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
