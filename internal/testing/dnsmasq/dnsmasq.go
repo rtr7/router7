@@ -125,7 +125,7 @@ func Run(t *testing.T, iface, ns string) *Process {
 	// listening for requests.
 	for {
 		b, err := ioutil.ReadFile(ready.Name())
-		if err != nil {
+		if err != nil && !os.IsNotExist(err) {
 			t.Fatal(err)
 		}
 		if strings.TrimSpace(string(b)) == strconv.Itoa(p.dnsmasq.Process.Pid) {
