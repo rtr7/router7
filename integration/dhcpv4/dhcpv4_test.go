@@ -144,17 +144,21 @@ func TestDHCPv4(t *testing.T) {
 
 	dnsmasq.Kill() // to flush logs
 	got := dnsmasq.Actions()
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Fatal(err)
+	}
 	want := []string{
 		"DHCPDISCOVER(veth0b) 02:73:53:00:ca:fe",
 		"DHCPOFFER(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
 		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
-		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
+		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe " + hostname,
 
 		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
-		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
+		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe " + hostname,
 
 		"DHCPREQUEST(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
-		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe midna",
+		"DHCPACK(veth0b) 192.168.23.4 02:73:53:00:ca:fe " + hostname,
 
 		"DHCPRELEASE(veth0b) 192.168.23.4 02:73:53:00:ca:fe",
 	}
