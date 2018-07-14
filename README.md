@@ -1,5 +1,7 @@
 # router7
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/rtr7/router7)](https://goreportcard.com/report/github.com/rtr7/router7)
+
 TODO(stapelberg): travis badge, reportcard badge
 
 router7 is a pure-Go implementation of a small home internet router. It comes with all the services required to make a [fiber7 internet connection](https://www.init7.net/en/internet/fiber7/) work (DHCPv4, DHCPv6, DNS, etc.).
