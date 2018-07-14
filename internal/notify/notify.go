@@ -40,6 +40,9 @@ func Process(name string, sig os.Signal) error {
 		}
 		b, err := ioutil.ReadFile(filepath.Join("/proc", fi.Name(), "cmdline"))
 		if err != nil {
+			if os.IsNotExist(err) {
+				continue // process vanished
+			}
 			return err
 		}
 		if !strings.HasPrefix(string(b), name) {
