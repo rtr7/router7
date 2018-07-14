@@ -111,6 +111,7 @@ Next, build a router7 image:
 
 ```
 go get -u github.com/gokrazy/tools/cmd/gokr-packer
+go get -u -d github.com/rtr7/router7
 mkdir /tmp/recovery
 GOARCH=amd64 gokr-packer \
 	-hostname=router7 \
