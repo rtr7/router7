@@ -41,7 +41,7 @@ func logic() error {
 
 	duid, err := ioutil.ReadFile("/perm/dhcp6/duid")
 	if err != nil {
-		log.Printf("could not read /perm/dhcp6/duid (%v), proceeding with DUID-LLT")
+		log.Printf("could not read /perm/dhcp6/duid (%v), proceeding with DUID-LLT", err)
 	}
 
 	c, err := dhcp6.NewClient(dhcp6.ClientConfig{
