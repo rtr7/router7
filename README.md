@@ -1,8 +1,9 @@
 # router7
 
+[![GoDoc](https://godoc.org/github.com/rtr7/router7/cmd?status.svg)](https://godoc.org/github.com/rtr7/router7/cmd)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rtr7/router7)](https://goreportcard.com/report/github.com/rtr7/router7)
 
-TODO(stapelberg): travis badge, reportcard badge
+TODO(stapelberg): travis badge
 
 router7 is a pure-Go implementation of a small home internet router. It comes with all the services required to make a [fiber7 internet connection](https://www.init7.net/en/internet/fiber7/) work (DHCPv4, DHCPv6, DNS, etc.).
 
