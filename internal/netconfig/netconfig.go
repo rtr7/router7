@@ -477,6 +477,19 @@ func getCounter(c *nftables.Conn, table *nftables.Table, chain *nftables.Chain) 
 	if err != nil {
 		return DefaultCounter
 	}
+	{
+		// TODO: remove this workaround once travis has workers with a newer kernel
+		// than its current Ubuntu trusty kernel (Linux 4.4.0):
+		var filtered []*nftables.Rule
+		for _, rule := range rules {
+			if rule.Table.Name != table.Name ||
+				rule.Chain.Name != chain.Name {
+				continue
+			}
+			filtered = append(filtered, rule)
+		}
+		rules = filtered
+	}
 	if got, want := len(rules), 1; got != want {
 		log.Printf("could not carry counter values: unexpected number of rules in table %v, chain %v: got %d, want %d", table.Name, chain.Name, got, want)
 		return DefaultCounter
