@@ -213,7 +213,7 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		}
 
 		// offer previous lease for this HardwareAddr, if any
-		if lease, ok := h.leasesHW[hwAddr]; ok {
+		if lease, ok := h.leasesHW[hwAddr]; ok && !lease.Expired(h.timeNow()) {
 			free = lease.Num
 		}
 
