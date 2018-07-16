@@ -30,7 +30,8 @@ import (
 )
 
 type Server struct {
-	pc *ipv6.PacketConn
+	pc     *ipv6.PacketConn
+	ifname string
 
 	mu       sync.Mutex
 	prefixes []net.IPNet
@@ -43,6 +44,15 @@ func NewServer() (*Server, error) {
 
 func (s *Server) SetPrefixes(prefixes []net.IPNet) {
 	s.mu.Lock()
+	if s.ifname != "" {
+		var err error
+		// Gather details about the interface again, the MAC address might have been
+		// changed.
+		s.iface, err = net.InterfaceByName(s.ifname)
+		if err != nil {
+			log.Fatal(err) // interface vanished
+		}
+	}
 	s.prefixes = prefixes
 	s.mu.Unlock()
 	if s.iface != nil {
@@ -52,6 +62,7 @@ func (s *Server) SetPrefixes(prefixes []net.IPNet) {
 
 func (s *Server) Serve(ifname string, conn net.PacketConn) error {
 	var err error
+	s.ifname = ifname
 	s.iface, err = net.InterfaceByName(ifname)
 	if err != nil {
 		return err
@@ -180,6 +191,8 @@ var ipv6LinkLocal = func(cidr string) *net.IPNet {
 }("fe80::/10")
 
 func (s *Server) sendAdvertisement(addr net.Addr) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
 	if s.prefixes == nil {
 		return nil // nothing to do
 	}
@@ -199,7 +212,6 @@ func (s *Server) sendAdvertisement(addr net.Addr) error {
 		(sourceLinkLayerAddress{address: s.iface.HardwareAddr}).Marshal(),
 		(mtu{mtu: uint32(s.iface.MTU)}).Marshal(),
 	}
-	s.mu.Lock()
 	for _, prefix := range s.prefixes {
 		ones, _ := prefix.Mask.Size()
 		// Use the first /64 subnet within larger prefixes
@@ -240,7 +252,6 @@ func (s *Server) sendAdvertisement(addr net.Addr) error {
 			}).Marshal())
 		}
 	}
-	s.mu.Unlock()
 
 	buf := gopacket.NewSerializeBuffer()
 	if err := options.SerializeTo(buf, gopacket.SerializeOptions{FixLengths: true}); err != nil {
