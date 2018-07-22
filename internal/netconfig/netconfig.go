@@ -94,6 +94,7 @@ func applyDhcp4(dir string) error {
 	if err != nil {
 		return fmt.Errorf("netlink.NewHandle: %v", err)
 	}
+	defer h.Delete()
 	if err := h.AddrReplace(link, addr); err != nil {
 		return fmt.Errorf("AddrReplace(%v): %v", addr, err)
 	}
