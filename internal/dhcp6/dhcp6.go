@@ -162,16 +162,16 @@ func (c *Client) sendReceive(packet dhcpv6.DHCPv6, expectedType dhcpv6.MessageTy
 	if packet == nil {
 		return nil, fmt.Errorf("Packet to send cannot be nil")
 	}
-	if expectedType == dhcpv6.MSGTYPE_NONE {
+	if expectedType == dhcpv6.MessageTypeNone {
 		// infer the expected type from the packet being sent
-		if packet.Type() == dhcpv6.SOLICIT {
-			expectedType = dhcpv6.ADVERTISE
-		} else if packet.Type() == dhcpv6.REQUEST {
-			expectedType = dhcpv6.REPLY
-		} else if packet.Type() == dhcpv6.RELAY_FORW {
-			expectedType = dhcpv6.RELAY_REPL
-		} else if packet.Type() == dhcpv6.LEASEQUERY {
-			expectedType = dhcpv6.LEASEQUERY_REPLY
+		if packet.Type() == dhcpv6.MessageTypeSolicit {
+			expectedType = dhcpv6.MessageTypeAdvertise
+		} else if packet.Type() == dhcpv6.MessageTypeRequest {
+			expectedType = dhcpv6.MessageTypeReply
+		} else if packet.Type() == dhcpv6.MessageTypeRelayForward {
+			expectedType = dhcpv6.MessageTypeRelayReply
+		} else if packet.Type() == dhcpv6.MessageTypeLeaseQuery {
+			expectedType = dhcpv6.MessageTypeLeaseQueryReply
 		} // and probably more
 	}
 
@@ -213,7 +213,7 @@ func (c *Client) sendReceive(packet dhcpv6.DHCPv6, expectedType dhcpv6.MessageTy
 				continue
 			}
 		}
-		if expectedType == dhcpv6.MSGTYPE_NONE {
+		if expectedType == dhcpv6.MessageTypeNone {
 			// just take whatever arrived
 			break
 		} else if adv.Type() == expectedType {
@@ -242,7 +242,7 @@ func (c *Client) solicit(solicit dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6, e
 		return nil, nil, err
 	}
 	solicit.AddOption(opt)
-	advertise, err := c.sendReceive(solicit, dhcpv6.MSGTYPE_NONE)
+	advertise, err := c.sendReceive(solicit, dhcpv6.MessageTypeNone)
 	return solicit, advertise, err
 }
 
@@ -252,7 +252,7 @@ func (c *Client) request(advertise dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6,
 	if err != nil {
 		return nil, nil, err
 	}
-	if iapd := advertise.GetOneOption(dhcpv6.OPTION_IA_PD); iapd != nil {
+	if iapd := advertise.GetOneOption(dhcpv6.OptionIAPD); iapd != nil {
 		request.AddOption(iapd)
 	}
 
@@ -261,7 +261,7 @@ func (c *Client) request(advertise dhcpv6.DHCPv6) (dhcpv6.DHCPv6, dhcpv6.DHCPv6,
 		c.transactionIDs = c.transactionIDs[1:]
 		request.(*dhcpv6.DHCPv6Message).SetTransactionID(id)
 	}
-	reply, err := c.sendReceive(request, dhcpv6.MSGTYPE_NONE)
+	reply, err := c.sendReceive(request, dhcpv6.MessageTypeNone)
 	return request, reply, err
 }
 
@@ -321,14 +321,14 @@ func (c *Client) Release() (release dhcpv6.DHCPv6, reply dhcpv6.DHCPv6, err erro
 	if err != nil {
 		return nil, nil, err
 	}
-	release.(*dhcpv6.DHCPv6Message).SetMessage(dhcpv6.RELEASE)
+	release.(*dhcpv6.DHCPv6Message).SetMessage(dhcpv6.MessageTypeRelease)
 
 	if len(c.transactionIDs) > 0 {
 		id := c.transactionIDs[0]
 		c.transactionIDs = c.transactionIDs[1:]
 		release.(*dhcpv6.DHCPv6Message).SetTransactionID(id)
 	}
-	reply, err = c.sendReceive(release, dhcpv6.MSGTYPE_NONE)
+	reply, err = c.sendReceive(release, dhcpv6.MessageTypeNone)
 	return release, reply, err
 }
 
