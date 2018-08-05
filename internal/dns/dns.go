@@ -129,7 +129,11 @@ func (s *Server) SetLeases(leases []dhcp4d.Lease) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	s.initHostsLocked()
+	now := time.Now()
 	for _, l := range leases {
+		if l.Expired(now) {
+			continue
+		}
 		s.hostsByName[l.Hostname] = l.Addr.String()
 		if rev, err := dns.ReverseAddr(l.Addr.String()); err == nil {
 			s.hostsByIP[rev] = l.Hostname

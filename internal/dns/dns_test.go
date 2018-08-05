@@ -19,6 +19,7 @@ import (
 	"net"
 	"os"
 	"testing"
+	"time"
 
 	"github.com/rtr7/router7/internal/dhcp4d"
 
@@ -76,7 +77,7 @@ func TestDHCP(t *testing.T) {
 		},
 	})
 
-	t.Run("xps.lan.", func(t *testing.T) {
+	resolveXps := func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion("xps.lan.", dns.TypeA)
 		s.Mux.ServeDNS(r, m)
@@ -90,7 +91,24 @@ func TestDHCP(t *testing.T) {
 		if got, want := a.(*dns.A).A, net.ParseIP("192.168.42.23"); !got.Equal(want) {
 			t.Fatalf("unexpected response IP: got %v, want %v", got, want)
 		}
+	}
+	t.Run("xps.lan.", resolveXps)
+
+	expired := time.Now().Add(-1 * time.Second)
+	s.SetLeases([]dhcp4d.Lease{
+		{
+			Hostname: "xps",
+			Addr:     net.IP{192, 168, 42, 23},
+			Expiry:   time.Now().Add(1 * time.Minute),
+		},
+		{
+			Hostname: "xps",
+			Addr:     net.IP{192, 168, 42, 150},
+			Expiry:   expired,
+		},
 	})
+
+	t.Run("xps.lan. (expired)", resolveXps)
 
 	t.Run("notfound.lan.", func(t *testing.T) {
 		m := new(dns.Msg)
