@@ -27,7 +27,7 @@ import (
 	"github.com/rtr7/router7/internal/netconfig"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/nftables/expr"
+	"github.com/google/nftables"
 )
 
 const goldenInterfaces = `
@@ -128,7 +128,7 @@ func TestNetconfig(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		netconfig.DefaultCounter = expr.Counter{Packets: 23, Bytes: 42}
+		netconfig.DefaultCounterObj = &nftables.CounterObj{Packets: 23, Bytes: 42}
 		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
 			t.Fatalf("netconfig.Apply: %v", err)
 		}
@@ -136,7 +136,7 @@ func TestNetconfig(t *testing.T) {
 		// Apply twice to ensure the absence of errors when dealing with
 		// already-configured interfaces, addresses, routes, … (and ensure
 		// nftables rules are replaced, not appendend to).
-		netconfig.DefaultCounter = expr.Counter{Packets: 0, Bytes: 0}
+		netconfig.DefaultCounterObj = &nftables.CounterObj{Packets: 0, Bytes: 0}
 		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
 			t.Fatalf("netconfig.Apply: %v", err)
 		}
@@ -248,15 +248,23 @@ func TestNetconfig(t *testing.T) {
 		`	}`,
 		`}`,
 		`table ip filter {`,
+		`   counter fwded {`,
+		`       packets 23 bytes 42`,
+		`   }`,
+		``,
 		`	chain forward {`,
 		`		type filter hook forward priority 0; policy accept;`,
-		`		counter packets 23 bytes 42`,
+		`		counter name "fwded"`,
 		`	}`,
 		`}`,
 		`table ip6 filter {`,
+		`   counter fwded {`,
+		`       packets 23 bytes 42`,
+		`   }`,
+		``,
 		`	chain forward {`,
 		`		type filter hook forward priority 0; policy accept;`,
-		`		counter packets 23 bytes 42`,
+		`		counter name "fwded"`,
 		`	}`,
 		`}`,
 	}

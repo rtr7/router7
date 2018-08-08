@@ -21,11 +21,11 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
 
 	"github.com/gokrazy/gokrazy"
 	"github.com/google/nftables"
-	"github.com/google/nftables/expr"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -44,25 +44,43 @@ var (
 func init() {
 	var c nftables.Conn
 	for _, metric := range []struct {
-		name   string
-		labels prometheus.Labels
-		table  *nftables.Table
-		chain  *nftables.Chain
+		name           string
+		labels         prometheus.Labels
+		obj            *nftables.CounterObj
+		packets, bytes uint64
 	}{
 		{
 			name:   "filter_forward",
 			labels: prometheus.Labels{"family": "ipv4"},
-			table:  &nftables.Table{Family: nftables.TableFamilyIPv4, Name: "filter"},
-			chain:  &nftables.Chain{Name: "forward"},
+			obj: &nftables.CounterObj{
+				Table: &nftables.Table{Family: nftables.TableFamilyIPv4, Name: "filter"},
+				Name:  "fwded",
+			},
 		},
 		{
 			name:   "filter_forward",
 			labels: prometheus.Labels{"family": "ipv6"},
-			table:  &nftables.Table{Family: nftables.TableFamilyIPv6, Name: "filter"},
-			chain:  &nftables.Chain{Name: "forward"},
+			obj: &nftables.CounterObj{
+				Table: &nftables.Table{Family: nftables.TableFamilyIPv6, Name: "filter"},
+				Name:  "fwded",
+			},
 		},
 	} {
 		metric := metric // copy
+		var mu sync.Mutex
+		updateCounter := func() {
+			mu.Lock()
+			defer mu.Unlock()
+			objs, err := c.GetObjReset(metric.obj)
+			if err != nil ||
+				len(objs) != 1 {
+				return
+			}
+			if co, ok := objs[0].(*nftables.CounterObj); ok {
+				metric.packets += co.Packets
+				metric.bytes += co.Bytes
+			}
+		}
 		promauto.NewCounterFunc(
 			prometheus.CounterOpts{
 				Subsystem:   "nftables",
@@ -71,16 +89,8 @@ func init() {
 				ConstLabels: metric.labels,
 			},
 			func() float64 {
-				rules, err := c.GetRule(metric.table, metric.chain)
-				if err != nil ||
-					len(rules) != 1 ||
-					len(rules[0].Exprs) != 1 {
-					return 0
-				}
-				if ce, ok := rules[0].Exprs[0].(*expr.Counter); ok {
-					return float64(ce.Packets)
-				}
-				return 0
+				updateCounter()
+				return float64(metric.packets)
 			})
 		promauto.NewCounterFunc(
 			prometheus.CounterOpts{
@@ -90,16 +100,8 @@ func init() {
 				ConstLabels: metric.labels,
 			},
 			func() float64 {
-				rules, err := c.GetRule(metric.table, metric.chain)
-				if err != nil ||
-					len(rules) != 1 ||
-					len(rules[0].Exprs) != 1 {
-					return 0
-				}
-				if ce, ok := rules[0].Exprs[0].(*expr.Counter); ok {
-					return float64(ce.Bytes)
-				}
-				return 0
+				updateCounter()
+				return float64(metric.bytes)
 			})
 	}
 }

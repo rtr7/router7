@@ -470,39 +470,44 @@ func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, pre
 	return nil
 }
 
-// DefaultCounter is overridden while testing
-var DefaultCounter expr.Counter
+// DefaultCounterObj is overridden while testing
+var DefaultCounterObj = &nftables.CounterObj{}
 
-func getCounter(c *nftables.Conn, table *nftables.Table, chain *nftables.Chain) expr.Counter {
-	rules, err := c.GetRule(table, chain)
+func getCounterObj(c *nftables.Conn, o *nftables.CounterObj) *nftables.CounterObj {
+	objs, err := c.GetObj(o)
 	if err != nil {
-		return DefaultCounter
+		o.Bytes = DefaultCounterObj.Bytes
+		o.Packets = DefaultCounterObj.Packets
+		return o
 	}
 	{
 		// TODO: remove this workaround once travis has workers with a newer kernel
 		// than its current Ubuntu trusty kernel (Linux 4.4.0):
-		var filtered []*nftables.Rule
-		for _, rule := range rules {
-			if rule.Table.Name != table.Name ||
-				rule.Chain.Name != chain.Name {
+		var filtered []nftables.Obj
+		for _, obj := range objs {
+			co, ok := obj.(*nftables.CounterObj)
+			if !ok {
 				continue
 			}
-			filtered = append(filtered, rule)
+			if co.Table.Name != o.Table.Name {
+				continue
+			}
+			filtered = append(filtered, obj)
 		}
-		rules = filtered
+		objs = filtered
 	}
-	if got, want := len(rules), 1; got != want {
-		log.Printf("could not carry counter values: unexpected number of rules in table %v, chain %v: got %d, want %d", table.Name, chain.Name, got, want)
-		return DefaultCounter
+	if got, want := len(objs), 1; got != want {
+		log.Printf("could not carry counter values: unexpected number of objects in table %v: got %d, want %d", o.Table.Name, got, want)
+		o.Bytes = DefaultCounterObj.Bytes
+		o.Packets = DefaultCounterObj.Packets
+		return o
 	}
-	if got, want := len(rules[0].Exprs), 1; got != want {
-		log.Printf("could not carry counter values: unexpected number of exprs in rule 0 in table %v, chain %v: got %d, want %d", table.Name, chain.Name, got, want)
-		return DefaultCounter
+	if co, ok := objs[0].(*nftables.CounterObj); ok {
+		return co
 	}
-	if ce, ok := rules[0].Exprs[0].(*expr.Counter); ok {
-		return *ce
-	}
-	return DefaultCounter
+	o.Bytes = DefaultCounterObj.Bytes
+	o.Packets = DefaultCounterObj.Packets
+	return o
 }
 
 func applyFirewall(dir string) error {
@@ -571,14 +576,22 @@ func applyFirewall(dir string) error {
 			Type:     nftables.ChainTypeFilter,
 		})
 
-		counter := getCounter(c, filter, forward)
+		counterObj := getCounterObj(c, &nftables.CounterObj{
+			Table: filter,
+			Name:  "fwded",
+		})
+		counter := c.AddObj(counterObj).(*nftables.CounterObj)
 
+		const NFT_OBJECT_COUNTER = 1 // TODO: get into x/sys/unix
 		c.AddRule(&nftables.Rule{
 			Table: filter,
 			Chain: forward,
 			Exprs: []expr.Any{
-				// [ counter pkts 23 bytes 42 ]
-				&counter,
+				// [ counter name fwded ]
+				&expr.Objref{
+					Type: NFT_OBJECT_COUNTER,
+					Name: counter.Name,
+				},
 			},
 		})
 	}
