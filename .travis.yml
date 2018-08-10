@@ -1,7 +1,7 @@
 # Use the (faster) container-based infrastructure, see also
 # http://docs.travis-ci.com/user/workers/container-based-infrastructure/
 sudo: required
-dist: trusty
+dist: xenial
 services:
   - docker
 
