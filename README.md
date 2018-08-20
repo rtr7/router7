@@ -66,7 +66,7 @@ The individual services can be found in [github.com/rtr7/router7/cmd](https://go
 |---|---|---|---|
 | `/perm/dhcp4/wire/ack` | `dhcp4` | `dhcp4` | last DHCPACK packet for renewals across restarts |
 | `/perm/dhcp4/wire/lease.json` | `dhcp4` | `netconfigd` | Obtained DHCPv4 lease |
-| `/perm/dhcp6/wire/lease.json` | `dhcp6` | `netconfigd` | Obtained DHCPv6 lease |
+| `/perm/dhcp6/wire/lease.json` | `dhcp6` | `netconfigd`, `radvd` | Obtained DHCPv6 lease |
 | `/perm/dhcp4d/leases.json` | `dhcp4d` | `dhcp4d`, `dnsd` | DHCPv4 leases handed out (including hostnames) |
 
 ### Available ports
