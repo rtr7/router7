@@ -182,6 +182,14 @@ func (c *Client) addClientId(p *dhcp4.Packet) {
 	p.AddOption(dhcp4.OptionClientIdentifier, id)
 }
 
+func (c *Client) addOptionParameterRequest(p *dhcp4.Packet, opts []dhcp4.OptionCode) {
+	op := make([]byte, len(opts))
+	for i, o := range opts {
+		op[i] = byte(o)
+	}
+	p.AddOption(dhcp4.OptionParameterRequestList, op)
+}
+
 // dhcpRequest is a copy of (dhcp4client/Client).Request which
 // includes the hostname.
 func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
@@ -190,6 +198,7 @@ func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
 		discoveryPacket := c.dhcp.DiscoverPacket()
 		c.addHostname(&discoveryPacket)
 		c.addClientId(&discoveryPacket)
+		c.addOptionParameterRequest(&discoveryPacket, []dhcp4.OptionCode{dhcp4.OptionDomainNameServer, dhcp4.OptionRouter, dhcp4.OptionSubnetMask})
 		discoveryPacket.PadToMinSize()
 
 		if err := c.dhcp.SendPacket(discoveryPacket); err != nil {
@@ -208,6 +217,7 @@ func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
 	requestPacket := c.dhcp.RequestPacket(&last)
 	c.addHostname(&requestPacket)
 	c.addClientId(&requestPacket)
+	c.addOptionParameterRequest(&requestPacket, []dhcp4.OptionCode{dhcp4.OptionDomainNameServer, dhcp4.OptionRouter, dhcp4.OptionSubnetMask})
 	requestPacket.PadToMinSize()
 
 	if err := c.dhcp.SendPacket(requestPacket); err != nil {
