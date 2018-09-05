@@ -89,7 +89,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 			return nil, err
 		}
 		laddr = &net.UDPAddr{
-			IP:   *llAddr,
+			IP:   llAddr,
 			Port: dhcpv6.DefaultClientPort,
 			// HACK: Zone should ideally be cfg.InterfaceName, but Go’s
 			// ipv6ZoneCache is only updated every 60s, so the addition of the
