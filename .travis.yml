@@ -11,8 +11,6 @@ go:
 
 install:
   - go get -t -v -d ./...
-  # TODO: get rid of this once https://github.com/google/gopacket/pull/470 is merged
-  - (cd $GOPATH/src/github.com/google/gopacket && wget -qO- https://patch-diff.githubusercontent.com/raw/google/gopacket/pull/470.patch | patch -p1)
 
 script:
   # Check whether files are syntactically correct.

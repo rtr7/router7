@@ -45,7 +45,7 @@ var (
 func capturePackets(ctx context.Context) (chan gopacket.Packet, error) {
 	packets := make(chan gopacket.Packet)
 	for _, ifname := range []string{"uplink0", "lan0"} {
-		handle, err := pcapgo.OpenEthernet(ifname)
+		handle, err := pcapgo.NewEthernetHandle(ifname)
 		if err != nil {
 			return nil, err
 		}
