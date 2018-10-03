@@ -70,6 +70,34 @@ const goldenPortForwardings = `
 }
 `
 
+const additionalPortForwardings = `
+{
+  "forwardings":[
+    {
+      "port": "8080",
+      "dest_addr": "192.168.42.23",
+      "dest_port": "9999"
+    },
+    {
+      "port": "8045",
+      "dest_addr": "192.168.42.22",
+      "dest_port": "8045"
+    },
+    {
+      "port": "8040-8060",
+      "dest_addr": "192.168.42.99",
+      "dest_port": "8040-8060"
+    },
+    {
+      "proto": "udp",
+      "port": "53",
+      "dest_addr": "192.168.42.99",
+      "dest_port": "53"
+    }
+  ]
+}
+`
+
 const goldenDhcp4 = `
 {
   "valid_until":"2018-05-18T23:46:04.429895261+02:00",
@@ -104,13 +132,17 @@ func TestNetconfig(t *testing.T) {
 		}
 		defer os.RemoveAll(tmp)
 
+		pf := goldenPortForwardings
+		if os.Getenv("ADDITIONAL_PORT_FORWARDINGS") == "1" {
+			pf = additionalPortForwardings
+		}
 		for _, golden := range []struct {
 			filename, content string
 		}{
 			{"dhcp4/wire/lease.json", goldenDhcp4},
 			{"dhcp6/wire/lease.json", goldenDhcp6},
 			{"interfaces.json", goldenInterfaces},
-			{"portforwardings.json", goldenPortForwardings},
+			{"portforwardings.json", pf},
 		} {
 			if err := os.MkdirAll(filepath.Join(tmp, filepath.Dir(golden.filename)), 0755); err != nil {
 				t.Fatal(err)
@@ -274,6 +306,65 @@ func TestNetconfig(t *testing.T) {
 		}),
 	}
 
+	if diff := cmp.Diff(rules, wantRules, opts...); diff != "" {
+		t.Fatalf("unexpected nftables rules: diff (-got +want):\n%s", diff)
+	}
+
+	cmd = exec.Command("ip", "netns", "exec", ns, os.Args[0], "-test.run=^TestNetconfig$")
+	cmd.Env = append(os.Environ(), "HELPER_PROCESS=1", "ADDITIONAL_PORT_FORWARDINGS=1")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	rules, err = ipLines("netns", "exec", ns, "nft", "list", "ruleset")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for n, rule := range rules {
+		t.Logf("rule %d: %s", n, rule)
+	}
+	if len(rules) < 2 {
+		t.Fatalf("nftables rules not found")
+	}
+
+	wantRules = []string{
+		`table ip nat {`,
+		`	chain prerouting {`,
+		`		type nat hook prerouting priority 0; policy accept;`,
+		`		iifname "uplink0" udp dport domain dnat to 192.168.42.99:domain`,
+		`		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060`,
+		`		iifname "uplink0" tcp dport 8045 dnat to 192.168.42.22:8045`,
+		`		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999`,
+		`	}`,
+		``,
+		`	chain postrouting {`,
+		`		type nat hook postrouting priority 100; policy accept;`,
+		`		oifname "uplink0" masquerade`,
+		`	}`,
+		`}`,
+		`table ip filter {`,
+		`   counter fwded {`,
+		`       packets 23 bytes 42`,
+		`   }`,
+		``,
+		`	chain forward {`,
+		`		type filter hook forward priority 0; policy accept;`,
+		`		counter name "fwded"`,
+		`	}`,
+		`}`,
+		`table ip6 filter {`,
+		`   counter fwded {`,
+		`       packets 23 bytes 42`,
+		`   }`,
+		``,
+		`	chain forward {`,
+		`		type filter hook forward priority 0; policy accept;`,
+		`		counter name "fwded"`,
+		`	}`,
+		`}`,
+	}
 	if diff := cmp.Diff(rules, wantRules, opts...); diff != "" {
 		t.Fatalf("unexpected nftables rules: diff (-got +want):\n%s", diff)
 	}
