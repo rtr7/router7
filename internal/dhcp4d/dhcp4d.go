@@ -163,8 +163,14 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		ComputeChecksums: true,
 		FixLengths:       true,
 	}
+	destMAC := p.CHAddr()
+	destIP := reply.YIAddr()
+	if p.Broadcast() {
+		destMAC = []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}
+		destIP = net.IPv4bcast
+	}
 	ethernet := &layers.Ethernet{
-		DstMAC:       p.CHAddr(),
+		DstMAC:       destMAC,
 		SrcMAC:       h.iface.HardwareAddr,
 		EthernetType: layers.EthernetTypeIPv4,
 	}
@@ -173,7 +179,7 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		Version:  4,
 		TTL:      255,
 		SrcIP:    h.serverIP,
-		DstIP:    reply.YIAddr(),
+		DstIP:    destIP,
 		Protocol: layers.IPProtocolUDP,
 		Flags:    layers.IPv4DontFragment,
 	}
@@ -188,7 +194,7 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		udp,
 		gopacket.Payload(reply))
 
-	if _, err := h.rawConn.WriteTo(buf.Bytes(), &raw.Addr{p.CHAddr()}); err != nil {
+	if _, err := h.rawConn.WriteTo(buf.Bytes(), &raw.Addr{destMAC}); err != nil {
 		log.Printf("WriteTo: %v", err)
 	}
 
