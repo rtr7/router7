@@ -162,3 +162,9 @@ To manually roll back to an older image, invoke `rtr7-safe-update` via the
 % cd ~/router7/updates/2018-07-03T17:33:52+02:00
 % ./recover.bash
 ```
+
+### Prometheus
+
+See https://github.com/rtr7/router7/tree/master/contrib/prometheus for example
+configuration files, and install the [router7 Grafana
+Dashboard](https://grafana.com/dashboards/8288).
