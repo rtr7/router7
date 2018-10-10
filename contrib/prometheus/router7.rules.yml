@@ -1,0 +1,5 @@
+groups:
+- name: router7.rules.yml
+  rules:
+  - record: family:nftables_filter_forward_bytes:rate10s_sum
+    expr: sum(rate(nftables_filter_forward_bytes[10s])) BY (family)
