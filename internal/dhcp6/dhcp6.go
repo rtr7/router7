@@ -287,19 +287,8 @@ func (c *Client) ObtainOrRenew() bool {
 			if t1.Before(newCfg.RenewAfter) || newCfg.RenewAfter.IsZero() {
 				newCfg.RenewAfter = t1
 			}
-			for b := o.Options(); len(b) > 0; {
-				sopt, err := dhcpv6.ParseOption(b)
-				if err != nil {
-					c.err = err
-					return true
-				}
-				b = b[4+sopt.Length():]
-
-				prefix, ok := sopt.(*dhcpv6.OptIAPrefix)
-				if !ok {
-					continue
-				}
-
+			if sopt := o.GetOneOption(dhcpv6.OptionIAPrefix); sopt != nil {
+				prefix := sopt.(*dhcpv6.OptIAPrefix)
 				newCfg.Prefixes = append(newCfg.Prefixes, net.IPNet{
 					IP:   prefix.IPv6Prefix(),
 					Mask: net.CIDRMask(int(prefix.PrefixLength()), 128),
