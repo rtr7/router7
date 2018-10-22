@@ -158,6 +158,9 @@ func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
 
 func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options dhcp4.Options) dhcp4.Packet {
 	reply := h.serveDHCP(p, msgType, options)
+	if reply == nil {
+		return nil // unsupported request
+	}
 	buf := gopacket.NewSerializeBuffer()
 	opts := gopacket.SerializeOptions{
 		ComputeChecksums: true,
