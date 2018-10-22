@@ -576,6 +576,74 @@ func applyFirewall(dir string) error {
 			Type:     nftables.ChainTypeFilter,
 		})
 
+		c.AddRule(&nftables.Rule{
+			Table: filter,
+			Chain: forward,
+			Exprs: []expr.Any{
+				// [ meta load oifname => reg 1 ]
+				&expr.Meta{Key: expr.MetaKeyOIFNAME, Register: 1},
+				// [ cmp eq reg 1 0x30707070 0x00000000 0x00000000 0x00000000 ]
+				&expr.Cmp{
+					Op:       expr.CmpOpEq,
+					Register: 1,
+					Data:     ifname("uplink0"),
+				},
+
+				// [ meta load l4proto => reg 1 ]
+				&expr.Meta{Key: expr.MetaKeyL4PROTO, Register: 1},
+				// [ cmp eq reg 1 0x00000006 ]
+				&expr.Cmp{
+					Op:       expr.CmpOpEq,
+					Register: 1,
+					Data:     []byte{unix.IPPROTO_TCP},
+				},
+
+				// [ payload load 1b @ transport header + 13 => reg 1 ]
+				&expr.Payload{
+					DestRegister: 1,
+					Base:         expr.PayloadBaseTransportHeader,
+					Offset:       13, // TODO
+					Len:          1,  // TODO
+				},
+				// [ bitwise reg 1 = (reg=1 & 0x00000002 ) ^ 0x00000000 ]
+				&expr.Bitwise{
+					DestRegister:   1,
+					SourceRegister: 1,
+					Len:            1,
+					Mask:           []byte{0x02},
+					Xor:            []byte{0x00},
+				},
+				// [ cmp neq reg 1 0x00000000 ]
+				&expr.Cmp{
+					Op:       expr.CmpOpNeq,
+					Register: 1,
+					Data:     []byte{0x00},
+				},
+
+				// [ rt load tcpmss => reg 1 ]
+				&expr.Rt{
+					Register: 1,
+					Key:      expr.RtTCPMSS,
+				},
+				// [ byteorder reg 1 = hton(reg 1, 2, 2) ]
+				&expr.Byteorder{
+					DestRegister:   1,
+					SourceRegister: 1,
+					Op:             expr.ByteorderHton,
+					Len:            2,
+					Size:           2,
+				},
+				// [ exthdr write tcpopt reg 1 => 2b @ 2 + 2 ]
+				&expr.Exthdr{
+					SourceRegister: 1,
+					Type:           2, // TODO
+					Offset:         2,
+					Len:            2,
+					Op:             expr.ExthdrOpTcpopt,
+				},
+			},
+		})
+
 		counterObj := getCounterObj(c, &nftables.CounterObj{
 			Table: filter,
 			Name:  "fwded",

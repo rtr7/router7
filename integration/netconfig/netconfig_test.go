@@ -287,6 +287,7 @@ func TestNetconfig(t *testing.T) {
 		`	chain forward {`,
 		`		type filter hook forward priority 0; policy accept;`,
 		`		counter name "fwded"`,
+		`		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu`,
 		`	}`,
 		`}`,
 		`table ip6 filter {`,
@@ -297,6 +298,7 @@ func TestNetconfig(t *testing.T) {
 		`	chain forward {`,
 		`		type filter hook forward priority 0; policy accept;`,
 		`		counter name "fwded"`,
+		`		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu`,
 		`	}`,
 		`}`,
 	}
@@ -352,6 +354,7 @@ func TestNetconfig(t *testing.T) {
 		`	chain forward {`,
 		`		type filter hook forward priority 0; policy accept;`,
 		`		counter name "fwded"`,
+		`		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu`,
 		`	}`,
 		`}`,
 		`table ip6 filter {`,
@@ -362,6 +365,7 @@ func TestNetconfig(t *testing.T) {
 		`	chain forward {`,
 		`		type filter hook forward priority 0; policy accept;`,
 		`		counter name "fwded"`,
+		`		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu`,
 		`	}`,
 		`}`,
 	}
