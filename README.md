@@ -112,7 +112,7 @@ width="800" alt="router7 development setup">
 Next, build a router7 image:
 
 ```
-go get -u github.com/gokrazy/tools/cmd/gokr-packer
+go get -u github.com/gokrazy/tools/cmd/gokr-packer github.com/rtr7/tools/cmd/...
 go get -u -d github.com/rtr7/router7
 mkdir /tmp/recovery
 GOARCH=amd64 gokr-packer \
