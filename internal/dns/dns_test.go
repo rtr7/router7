@@ -128,6 +128,54 @@ func TestHostname(t *testing.T) {
 
 	r := &recorder{}
 	s := NewServer("127.0.0.2:0", "lan")
+	s.SetLeases([]dhcp4d.Lease{
+		{
+			Hostname: hostname,
+			Addr:     net.IP{192, 168, 42, 23},
+		},
+	})
+
+	t.Run("A", func(t *testing.T) {
+		m := new(dns.Msg)
+		m.SetQuestion(hostname+".lan.", dns.TypeA)
+		s.Mux.ServeDNS(r, m)
+		if got, want := len(r.response.Answer), 1; got != want {
+			t.Fatalf("unexpected number of answers for %v: got %d, want %d", m.Question, got, want)
+		}
+		a := r.response.Answer[0]
+		if _, ok := a.(*dns.A); !ok {
+			t.Fatalf("unexpected response type: got %T, want dns.A", a)
+		}
+		if got, want := a.(*dns.A).A, net.ParseIP("127.0.0.2"); !got.Equal(want) {
+			t.Fatalf("unexpected response IP: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("PTR", func(t *testing.T) {
+		m := new(dns.Msg)
+		m.SetQuestion("2.0.0.127.in-addr.arpa.", dns.TypePTR)
+		s.Mux.ServeDNS(r, m)
+		if got, want := len(r.response.Answer), 1; got != want {
+			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
+		}
+		a := r.response.Answer[0]
+		if _, ok := a.(*dns.PTR); !ok {
+			t.Fatalf("unexpected response type: got %T, want dns.PTR", a)
+		}
+		if got, want := a.(*dns.PTR).Ptr, hostname+".lan."; got != want {
+			t.Fatalf("unexpected response record: got %q, want %q", got, want)
+		}
+	})
+}
+
+func TestHostnameDHCP(t *testing.T) {
+	hostname, err := os.Hostname()
+	if err != nil {
+		t.Skipf("os.Hostname: %v", err)
+	}
+
+	r := &recorder{}
+	s := NewServer("127.0.0.2:0", "lan")
 
 	t.Run("A", func(t *testing.T) {
 		m := new(dns.Msg)

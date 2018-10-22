@@ -134,6 +134,9 @@ func (s *Server) SetLeases(leases []dhcp4d.Lease) {
 		if l.Expired(now) {
 			continue
 		}
+		if _, ok := s.hostsByName[l.Hostname]; ok {
+			continue // don’t overwrite e.g. the hostname entry
+		}
 		s.hostsByName[l.Hostname] = l.Addr.String()
 		if rev, err := dns.ReverseAddr(l.Addr.String()); err == nil {
 			s.hostsByIP[rev] = l.Hostname
