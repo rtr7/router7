@@ -15,66 +15,26 @@
 package dhcp6
 
 import (
-	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcapgo"
+	"github.com/rtr7/router7/internal/testing/pcapreplayer"
 )
 
-type packet struct {
-	data []byte
-	ip   net.IP
-	err  error
-}
-
-type replayer struct {
-	pcapr *pcapgo.Reader
-}
-
-func (r *replayer) LocalAddr() net.Addr { return nil }
-func (r *replayer) Close() error        { return nil }
-func (r *replayer) WriteTo(b []byte, addr net.Addr) (n int, err error) {
-	//log.Printf("-> %v", b)
-	return len(b), nil
-}
-func (r *replayer) SetDeadline(t time.Time) error      { return nil }
-func (r *replayer) SetReadDeadline(t time.Time) error  { return nil }
-func (r *replayer) SetWriteDeadline(t time.Time) error { return nil }
-
-func (r *replayer) ReadFrom(buf []byte) (int, net.Addr, error) {
-	data, _, err := r.pcapr.ReadPacketData()
-	if err != nil {
-		return 0, nil, err
-	}
-	pkt := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{})
-	// TODO: get source IP
-	udp := pkt.Layer(layers.LayerTypeUDP)
-	if udp == nil {
-		return 0, nil, fmt.Errorf("pcap contained unexpected non-UDP packet")
-	}
-
-	//log.Printf("ReadFrom(): %x, %v, pkt = %+v", udp.LayerPayload(), err, pkt)
-	copy(buf, udp.LayerPayload())
-	return len(udp.LayerPayload()), &net.IPAddr{IP: net.ParseIP("192.168.23.1")}, err
-}
-
 func TestDHCP6(t *testing.T) {
-	f, err := os.Open("testdata/fiber7.pcap")
+	pcappath := os.Getenv("ROUTER7_PCAP_DIR")
+	if pcappath != "" {
+		pcappath = filepath.Join(pcappath, "dhcp6.pcap")
+	}
+	conn, err := pcapreplayer.NewPacketConn("testdata/fiber7.pcap", pcappath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	pcapr, err := pcapgo.NewReader(f)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	defer conn.Close()
 	laddr, err := net.ResolveUDPAddr("udp6", "[fe80::42:aff:fea5:966e]:546")
 	if err != nil {
 		t.Fatal(err)
@@ -85,7 +45,7 @@ func TestDHCP6(t *testing.T) {
 		// name to get the MAC address.
 		InterfaceName: "lo",
 		LocalAddr:     laddr,
-		Conn:          &replayer{pcapr: pcapr},
+		Conn:          conn,
 		TransactionIDs: []uint32{
 			0x48e59e, // SOLICIT
 			0x738c3b, // REQUEST

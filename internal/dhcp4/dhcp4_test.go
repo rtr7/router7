@@ -15,58 +15,26 @@
 package dhcp4
 
 import (
-	"fmt"
 	"net"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/google/go-cmp/cmp"
-	"github.com/google/gopacket"
-	"github.com/google/gopacket/layers"
-	"github.com/google/gopacket/pcapgo"
+	"github.com/rtr7/router7/internal/testing/pcapreplayer"
 )
 
-type packet struct {
-	data []byte
-	ip   net.IP
-	err  error
-}
-
-type replayer struct {
-	pcapr *pcapgo.Reader
-}
-
-func (r *replayer) Close() error                         { return nil }
-func (r *replayer) Write(b []byte) error                 { /*log.Printf("-> %v", b); */ return nil }
-func (r *replayer) SetReadTimeout(t time.Duration) error { return nil }
-
-func (r *replayer) ReadFrom() ([]byte, net.IP, error) {
-	data, _, err := r.pcapr.ReadPacketData()
-	if err != nil {
-		return nil, nil, err
-	}
-	pkt := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{})
-	// TODO: get source IP
-	udp := pkt.Layer(layers.LayerTypeUDP)
-	if udp == nil {
-		return nil, nil, fmt.Errorf("pcap contained unexpected non-UDP packet")
-	}
-
-	//log.Printf("ReadFrom(): %v, %v, pkt = %+v", udp.LayerPayload(), err, pkt)
-	return udp.LayerPayload(), net.ParseIP("192.168.23.1"), err
-}
-
 func TestDHCP4(t *testing.T) {
-	f, err := os.Open("testdata/fiber7.pcap")
+	pcappath := os.Getenv("ROUTER7_PCAP_DIR")
+	if pcappath != "" {
+		pcappath = filepath.Join(pcappath, "dhcp4.pcap")
+	}
+	conn, err := pcapreplayer.NewDHCP4Conn("testdata/fiber7.pcap", pcappath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer f.Close()
-	pcapr, err := pcapgo.NewReader(f)
-	if err != nil {
-		t.Fatal(err)
-	}
+	defer conn.Close()
 
 	mac, err := net.ParseMAC("d8:58:d7:00:4e:df")
 	if err != nil {
@@ -77,7 +45,7 @@ func TestDHCP4(t *testing.T) {
 	c := Client{
 		hardwareAddr: mac,
 		timeNow:      func() time.Time { return now },
-		connection:   &replayer{pcapr: pcapr},
+		connection:   conn,
 		generateXID: func(b []byte) {
 			if got, want := len(b), 4; got != want {
 				t.Fatalf("github.com/d2g/dhcp4client request unexpected amount of bytes: got %d, want %d", got, want)
