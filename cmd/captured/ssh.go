@@ -61,20 +61,25 @@ type session struct {
 	channel ssh.Channel
 }
 
-func (s *session) request(req *ssh.Request, prb *packetRingBuffer) error {
+func (s *session) request(req *ssh.Request, prb *packetRingBuffer) (err error) {
 	switch req.Type {
 	case "exec":
 		if got, want := len(req.Payload), 4; got < want {
 			return fmt.Errorf("exec request payload too short: got %d, want >= %d", got, want)
 		}
 		log.Printf("exec, wantReply %v, payload %q", req.WantReply, string(req.Payload[4:]))
+		defer func() {
+			if err != nil {
+				log.Printf("exec done: %v", err)
+			}
+		}()
 
 		ctx, canc := context.WithCancel(context.Background())
 		defer canc()
 
 		pcapw := pcapgo.NewWriter(s.channel)
 		if err := pcapw.WriteFileHeader(1600, layers.LinkTypeEthernet); err != nil {
-			return err
+			return fmt.Errorf("pcapw.WriteFileHeader: %v", err)
 		}
 
 		prb.Lock()
@@ -82,7 +87,7 @@ func (s *session) request(req *ssh.Request, prb *packetRingBuffer) error {
 		buffered := prb.packetsLocked()
 		prb.Unlock()
 		if err != nil {
-			return err
+			return fmt.Errorf("capturePackets: %v", err)
 		}
 
 		req.Reply(true, nil)

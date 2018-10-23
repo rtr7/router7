@@ -20,6 +20,7 @@ import (
 	"container/ring"
 	"context"
 	"flag"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -47,17 +48,22 @@ func capturePackets(ctx context.Context) (chan gopacket.Packet, error) {
 	for _, ifname := range []string{"uplink0", "lan0"} {
 		handle, err := pcapgo.NewEthernetHandle(ifname)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("pcapgo.NewEthernetHandle(%v): %v", ifname, err)
 		}
 
 		if err := handle.SetBPF(instructions); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("SetBPF: %v", err)
 		}
 
 		pkgsrc := gopacket.NewPacketSource(handle, layers.LayerTypeEthernet)
 		go func() {
 			defer handle.Close()
-			for packet := range pkgsrc.Packets() {
+			for {
+				packet, err := pkgsrc.NextPacket()
+				if err != nil {
+					log.Printf("NextPacket: %v", err)
+					return
+				}
 				select {
 				case packets <- packet:
 				case <-ctx.Done():
