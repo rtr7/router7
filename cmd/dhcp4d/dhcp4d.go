@@ -19,18 +19,44 @@ import (
 	"encoding/json"
 	"flag"
 	"io/ioutil"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
 	"syscall"
+	"time"
 
-	"github.com/rtr7/router7/internal/dhcp4d"
-	"github.com/rtr7/router7/internal/notify"
-	"github.com/rtr7/router7/internal/teelogger"
-
+	"github.com/gokrazy/gokrazy"
 	"github.com/krolaw/dhcp4"
 	"github.com/krolaw/dhcp4/conn"
+	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/client_golang/prometheus/promauto"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
+
+	"github.com/rtr7/router7/internal/dhcp4d"
+	"github.com/rtr7/router7/internal/multilisten"
+	"github.com/rtr7/router7/internal/notify"
+	"github.com/rtr7/router7/internal/teelogger"
 )
 
 var log = teelogger.NewConsole()
+
+var nonExpiredLeases = promauto.NewGauge(prometheus.GaugeOpts{
+	Name: "non_expired_leases",
+	Help: "Number of non-expired DHCP leases",
+})
+
+func updateNonExpired(leases []*dhcp4d.Lease) {
+	now := time.Now()
+	nonExpired := 0
+	for _, l := range leases {
+		if l.Expired(now) {
+			continue
+		}
+		nonExpired++
+	}
+	nonExpiredLeases.Set(float64(nonExpired))
+}
 
 func loadLeases(h *dhcp4d.Handler, fn string) error {
 	b, err := ioutil.ReadFile(fn)
@@ -45,10 +71,42 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 		return err
 	}
 	h.SetLeases(leases)
+	updateNonExpired(leases)
+	return nil
+}
+
+var httpListeners = multilisten.NewPool()
+
+func updateListeners() error {
+	hosts, err := gokrazy.PrivateInterfaceAddrs()
+	if err != nil {
+		return err
+	}
+	if net1, err := multilisten.IPv6Net1("/perm"); err == nil {
+		hosts = append(hosts, net1)
+	}
+
+	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return &http.Server{Addr: net.JoinHostPort(host, "8067")}
+	})
 	return nil
 }
 
 func logic() error {
+	http.Handle("/metrics", promhttp.Handler())
+	if err := updateListeners(); err != nil {
+		return err
+	}
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGUSR1)
+		for range ch {
+			if err := updateListeners(); err != nil {
+				log.Printf("updateListeners: %v", err)
+			}
+		}
+	}()
+
 	if err := os.MkdirAll("/perm/dhcp4d", 0755); err != nil {
 		return err
 	}
@@ -71,6 +129,7 @@ func logic() error {
 		if err := ioutil.WriteFile("/perm/dhcp4d/leases.json", b, 0644); err != nil {
 			errs <- err
 		}
+		updateNonExpired(leases)
 		if err := notify.Process("/user/dnsd", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying dnsd: %v", err)
 		}
