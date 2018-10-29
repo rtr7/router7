@@ -32,6 +32,7 @@ import (
 
 	"github.com/rtr7/router7/internal/multilisten"
 	"github.com/rtr7/router7/internal/netconfig"
+	"github.com/rtr7/router7/internal/notify"
 	"github.com/rtr7/router7/internal/teelogger"
 )
 
@@ -134,6 +135,13 @@ func logic() error {
 	signal.Notify(ch, syscall.SIGUSR1)
 	for {
 		err := netconfig.Apply("/perm/", "/")
+
+		// Notify dhcp4d so that it can update its listeners for prometheus
+		// metrics on the external interface.
+		if err := notify.Process("/user/dhcp4d", syscall.SIGUSR1); err != nil {
+			log.Printf("notifying dhcp4d: %v", err)
+		}
+
 		// Notify gokrazy about new addresses (netconfig.Apply might have
 		// modified state before returning an error) so that listeners can be
 		// updated.
