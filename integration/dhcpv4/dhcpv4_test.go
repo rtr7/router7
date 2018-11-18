@@ -26,6 +26,7 @@ import (
 	"github.com/rtr7/router7/internal/dhcp4"
 	"github.com/rtr7/router7/internal/testing/dnsmasq"
 
+	"github.com/andreyvit/diff"
 	"github.com/google/go-cmp/cmp"
 )
 
@@ -165,7 +166,10 @@ func TestDHCPv4(t *testing.T) {
 	trimSpace := func(line string) string {
 		return strings.TrimSpace(line)
 	}
-	if diff := cmp.Diff(got, want, cmp.Transformer("TrimSpace", trimSpace)); diff != "" {
-		t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-got +want):\n%s", diff)
+	if !cmp.Equal(got, want, cmp.Transformer("TrimSpace", trimSpace)) {
+		t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-got +want):\n%s",
+			diff.LineDiff(
+				strings.Join(diff.TrimLines(got), "\n"),
+				strings.Join(diff.TrimLines(want), "\n")))
 	}
 }
