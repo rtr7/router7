@@ -173,3 +173,15 @@ func TestDHCPv4(t *testing.T) {
 				strings.Join(diff.TrimLines(want), "\n")))
 	}
 }
+
+func TestError(t *testing.T) {
+	c := dhcp4.Client{
+		Interface: nil,
+	}
+	if c.ObtainOrRenew() {
+		t.Fatalf("ObtainOrRenew unexpectedly succeeded")
+	}
+	if err := c.Err(); err == nil {
+		t.Fatalf("Err unexpectedly nil")
+	}
+}

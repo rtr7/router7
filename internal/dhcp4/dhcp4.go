@@ -18,7 +18,6 @@ package dhcp4
 import (
 	"bytes"
 	"fmt"
-	"log"
 	"net"
 	"sync"
 	"syscall"
@@ -81,6 +80,7 @@ func (c *Client) packet(xid uint32, opts []layers.DHCPOption) *layers.DHCPv4 {
 
 // ObtainOrRenew returns false when encountering a permanent error.
 func (c *Client) ObtainOrRenew() bool {
+	var onceErr error
 	c.once.Do(func() {
 		if c.timeNow == nil {
 			c.timeNow = time.Now
@@ -90,13 +90,13 @@ func (c *Client) ObtainOrRenew() bool {
 				LinuxSockDGRAM: true,
 			})
 			if err != nil {
-				c.err = err
+				onceErr = err
 				return
 			}
 			c.connection = conn
 		}
 		if c.connection == nil && c.Interface == nil {
-			c.err = fmt.Errorf("Interface is nil")
+			onceErr = fmt.Errorf("Interface is nil")
 			return
 		}
 		if c.hardwareAddr == nil {
@@ -108,12 +108,16 @@ func (c *Client) ObtainOrRenew() bool {
 		if c.hostname == "" {
 			var utsname unix.Utsname
 			if err := unix.Uname(&utsname); err != nil {
-				log.Fatal(err)
+				onceErr = err
+				return
 			}
 			c.hostname = string(utsname.Nodename[:bytes.IndexByte(utsname.Nodename[:], 0)])
 		}
 	})
-	// TODO: handle c.err from c.once
+	if onceErr != nil {
+		c.err = onceErr
+		return false // permanent error
+	}
 	c.err = nil // clear previous error
 	ack, err := c.dhcpRequest()
 	if err != nil {
