@@ -126,37 +126,20 @@ func (c *Client) ObtainOrRenew() bool {
 	}
 	c.Ack = ack
 	c.cfg.ClientIP = ack.YourClientIP.String()
-	leaseTime := 10 * time.Minute // seems sensible as a fallback
-	// As per RFC 2131 section 4.4.5:
-	// renewal time defaults to 50% of the lease time
-	var renewalTime *time.Duration
-
-	for _, opt := range dhcp4.ParseOptions(c.Ack.Options) {
-		switch o := opt.(type) {
-		case *dhcp4.OptSubnetMask:
-			c.cfg.SubnetMask = fmt.Sprintf("%d.%d.%d.%d", o.Mask[0], o.Mask[1], o.Mask[2], o.Mask[3])
-
-		case *dhcp4.OptRouter:
-			c.cfg.Router = o.Router.String()
-
-		case *dhcp4.OptDNS:
-			c.cfg.DNS = make([]string, len(o.DNS))
-			for idx, ip := range o.DNS {
-				c.cfg.DNS[idx] = ip.String()
-			}
-
-		case *dhcp4.OptLeaseTime:
-			leaseTime = o.LeaseTime
-
-		case *dhcp4.OptT1:
-			renewalTime = &o.T1
+	lease := dhcp4.LeaseFromACK(ack)
+	if mask := lease.Netmask; len(mask) > 0 {
+		c.cfg.SubnetMask = fmt.Sprintf("%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3])
+	}
+	if len(lease.Router) > 0 {
+		c.cfg.Router = lease.Router.String()
+	}
+	if len(lease.DNS) > 0 {
+		c.cfg.DNS = make([]string, len(lease.DNS))
+		for idx, ip := range lease.DNS {
+			c.cfg.DNS[idx] = ip.String()
 		}
 	}
-	if renewalTime == nil {
-		d := time.Duration(float64(leaseTime) * 0.5)
-		renewalTime = &d
-	}
-	c.cfg.RenewAfter = c.timeNow().Add(*renewalTime)
+	c.cfg.RenewAfter = c.timeNow().Add(lease.RenewalTime)
 	return true
 }
 
