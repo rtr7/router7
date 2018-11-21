@@ -17,7 +17,6 @@ package dhcp4
 
 import (
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"log"
 	"net"
@@ -25,10 +24,10 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/gopacket/layers"
+	"github.com/mdlayher/raw"
+	"github.com/rtr7/dhcp4"
 	"golang.org/x/sys/unix"
-
-	"github.com/d2g/dhcp4"
-	"github.com/d2g/dhcp4client"
 )
 
 type Config struct {
@@ -44,15 +43,40 @@ type Client struct {
 
 	err          error
 	once         sync.Once
-	dhcp         *dhcp4client.Client
-	connection   dhcp4client.ConnectionInt
+	connection   net.PacketConn
 	hardwareAddr net.HardwareAddr
+	hostname     string
 	cfg          Config
 	timeNow      func() time.Time
-	generateXID  func([]byte)
+	generateXID  func() uint32
 
 	// last DHCPACK packet for renewal/release
-	Ack dhcp4.Packet
+	Ack *layers.DHCPv4
+}
+
+func serverID(pkt *layers.DHCPv4) []layers.DHCPOption {
+	for _, o := range pkt.Options {
+		if o.Type == layers.DHCPOptServerID {
+			return []layers.DHCPOption{o}
+		}
+	}
+	return nil
+}
+
+func (c *Client) packet(xid uint32, opts []layers.DHCPOption) *layers.DHCPv4 {
+	return &layers.DHCPv4{
+		Operation:    layers.DHCPOpRequest,
+		HardwareType: layers.LinkTypeEthernet,
+		HardwareLen:  uint8(len(layers.EthernetBroadcast)),
+		HardwareOpts: 0, // TODO: document
+		Xid:          xid,
+		Secs:         0, // TODO: fill in?
+		Flags:        0, // TODO: document
+		ClientHWAddr: c.hardwareAddr,
+		ServerName:   nil,
+		File:         nil,
+		Options:      opts,
+	}
 }
 
 // ObtainOrRenew returns false when encountering a permanent error.
@@ -62,12 +86,14 @@ func (c *Client) ObtainOrRenew() bool {
 			c.timeNow = time.Now
 		}
 		if c.connection == nil && c.Interface != nil {
-			pktsock, err := dhcp4client.NewPacketSock(c.Interface.Index)
+			conn, err := raw.ListenPacket(c.Interface, syscall.ETH_P_IP, &raw.Config{
+				LinuxSockDGRAM: true,
+			})
 			if err != nil {
 				c.err = err
 				return
 			}
-			c.connection = pktsock
+			c.connection = conn
 		}
 		if c.connection == nil && c.Interface == nil {
 			c.err = fmt.Errorf("Interface is nil")
@@ -76,21 +102,20 @@ func (c *Client) ObtainOrRenew() bool {
 		if c.hardwareAddr == nil {
 			c.hardwareAddr = c.Interface.HardwareAddr
 		}
-		dhcp, err := dhcp4client.New(
-			dhcp4client.HardwareAddr(c.hardwareAddr),
-			dhcp4client.Timeout(10*time.Second),
-			dhcp4client.Broadcast(false),
-			dhcp4client.Connection(c.connection),
-			dhcp4client.GenerateXID(c.generateXID),
-		)
-		if err != nil {
-			c.err = err
-			return
+		if c.generateXID == nil {
+			c.generateXID = dhcp4.XIDGenerator(c.hardwareAddr)
 		}
-		c.dhcp = dhcp
+		if c.hostname == "" {
+			var utsname unix.Utsname
+			if err := unix.Uname(&utsname); err != nil {
+				log.Fatal(err)
+			}
+			c.hostname = string(utsname.Nodename[:bytes.IndexByte(utsname.Nodename[:], 0)])
+		}
 	})
+	// TODO: handle c.err from c.once
 	c.err = nil // clear previous error
-	ok, ack, err := c.dhcpRequest()
+	ack, err := c.dhcpRequest()
 	if err != nil {
 		if errno, ok := err.(syscall.Errno); ok && errno == syscall.EAGAIN {
 			c.err = fmt.Errorf("DHCP: timeout (server(s) unreachable)")
@@ -99,59 +124,53 @@ func (c *Client) ObtainOrRenew() bool {
 		c.err = fmt.Errorf("DHCP: %v", err)
 		return true // temporary error
 	}
-	if !ok {
-		c.err = fmt.Errorf("received DHCPNAK")
-		return true // temporary error
-	}
 	c.Ack = ack
-	opts := ack.ParseOptions()
-
-	// DHCPACK (described in RFC2131 4.3.1)
-	// - yiaddr: IP address assigned to client
-	c.cfg.ClientIP = ack.YIAddr().String()
-
-	if b, ok := opts[dhcp4.OptionSubnetMask]; ok {
-		mask := net.IPMask(b)
-		c.cfg.SubnetMask = fmt.Sprintf("%d.%d.%d.%d", mask[0], mask[1], mask[2], mask[3])
-	}
-
-	// if b, ok := opts[dhcp4.OptionBroadcastAddress]; ok {
-	// 	if err := cs.SetBroadcast(net.IP(b)); err != nil {
-	// 		log.Fatalf("setBroadcast(%v): %v", net.IP(b), err)
-	// 	}
-	// }
-
-	if b, ok := opts[dhcp4.OptionRouter]; ok {
-		c.cfg.Router = net.IP(b).String()
-	}
-
-	if b, ok := opts[dhcp4.OptionDomainNameServer]; ok {
-		c.cfg.DNS = nil
-		for len(b) > 0 {
-			c.cfg.DNS = append(c.cfg.DNS, net.IP(b[:4]).String())
-			b = b[4:]
-		}
-	}
-
+	c.cfg.ClientIP = ack.YourClientIP.String()
 	leaseTime := 10 * time.Minute // seems sensible as a fallback
-	if b, ok := opts[dhcp4.OptionIPAddressLeaseTime]; ok && len(b) == 4 {
-		leaseTime = parseDHCPDuration(b)
-	}
-
 	// As per RFC 2131 section 4.4.5:
 	// renewal time defaults to 50% of the lease time
-	renewalTime := time.Duration(float64(leaseTime) * 0.5)
-	if b, ok := opts[dhcp4.OptionRenewalTimeValue]; ok && len(b) == 4 {
-		renewalTime = parseDHCPDuration(b)
+	var renewalTime *time.Duration
+
+	for _, opt := range dhcp4.ParseOptions(c.Ack.Options) {
+		switch o := opt.(type) {
+		case *dhcp4.OptSubnetMask:
+			c.cfg.SubnetMask = fmt.Sprintf("%d.%d.%d.%d", o.Mask[0], o.Mask[1], o.Mask[2], o.Mask[3])
+
+		case *dhcp4.OptRouter:
+			c.cfg.Router = o.Router.String()
+
+		case *dhcp4.OptDNS:
+			c.cfg.DNS = make([]string, len(o.DNS))
+			for idx, ip := range o.DNS {
+				c.cfg.DNS[idx] = ip.String()
+			}
+
+		case *dhcp4.OptLeaseTime:
+			leaseTime = o.LeaseTime
+
+		case *dhcp4.OptT1:
+			renewalTime = &o.T1
+		}
 	}
-	c.cfg.RenewAfter = c.timeNow().Add(renewalTime)
+	if renewalTime == nil {
+		d := time.Duration(float64(leaseTime) * 0.5)
+		renewalTime = &d
+	}
+	c.cfg.RenewAfter = c.timeNow().Add(*renewalTime)
 	return true
 }
 
 func (c *Client) Release() error {
-	err := c.dhcp.Release(c.Ack)
+	release := c.packet(c.generateXID(), append([]layers.DHCPOption{
+		dhcp4.MessageTypeOpt(layers.DHCPMsgTypeRelease),
+	}, serverID(c.Ack)...))
+	release.ClientIP = c.Ack.YourClientIP
+	if err := dhcp4.Write(c.connection, release); err != nil {
+		return err
+	}
+
 	c.Ack = nil
-	return err
+	return nil
 }
 
 func (c *Client) Err() error {
@@ -162,78 +181,77 @@ func (c *Client) Config() Config {
 	return c.cfg
 }
 
-func parseDHCPDuration(b []byte) time.Duration {
-	return time.Duration(binary.BigEndian.Uint32(b)) * time.Second
-}
+func (c *Client) dhcpRequest() (*layers.DHCPv4, error) {
+	var last *layers.DHCPv4
 
-func (c *Client) addHostname(p *dhcp4.Packet) {
-	var utsname unix.Utsname
-	if err := unix.Uname(&utsname); err != nil {
-		log.Fatal(err)
-	}
-	nnb := utsname.Nodename[:bytes.IndexByte(utsname.Nodename[:], 0)]
-	p.AddOption(dhcp4.OptionHostName, nnb)
-}
-
-func (c *Client) addClientId(p *dhcp4.Packet) {
-	id := make([]byte, len(c.hardwareAddr)+1)
-	id[0] = 1 // hardware type ethernet, https://tools.ietf.org/html/rfc1700
-	copy(id[1:], c.hardwareAddr)
-	p.AddOption(dhcp4.OptionClientIdentifier, id)
-}
-
-func (c *Client) addOptionParameterRequest(p *dhcp4.Packet, opts []dhcp4.OptionCode) {
-	op := make([]byte, len(opts))
-	for i, o := range opts {
-		op[i] = byte(o)
-	}
-	p.AddOption(dhcp4.OptionParameterRequestList, op)
-}
-
-// dhcpRequest is a copy of (dhcp4client/Client).Request which
-// includes the hostname.
-func (c *Client) dhcpRequest() (bool, dhcp4.Packet, error) {
-	var last dhcp4.Packet
-	if c.Ack == nil {
-		discoveryPacket := c.dhcp.DiscoverPacket()
-		c.addHostname(&discoveryPacket)
-		c.addClientId(&discoveryPacket)
-		c.addOptionParameterRequest(&discoveryPacket, []dhcp4.OptionCode{dhcp4.OptionDomainNameServer, dhcp4.OptionRouter, dhcp4.OptionSubnetMask})
-		discoveryPacket.PadToMinSize()
-
-		if err := c.dhcp.SendPacket(discoveryPacket); err != nil {
-			return false, discoveryPacket, err
-		}
-
-		offerPacket, err := c.dhcp.GetOffer(&discoveryPacket)
-		if err != nil {
-			return false, offerPacket, err
-		}
-		last = offerPacket
-	} else {
+	if c.Ack != nil {
 		last = c.Ack
+	} else {
+		discover := c.packet(c.generateXID(), []layers.DHCPOption{
+			dhcp4.MessageTypeOpt(layers.DHCPMsgTypeDiscover),
+			dhcp4.HostnameOpt(c.hostname),
+			dhcp4.ClientIDOpt(layers.LinkTypeEthernet, c.hardwareAddr),
+			dhcp4.ParamsRequestOpt(
+				layers.DHCPOptDNS,
+				layers.DHCPOptRouter,
+				layers.DHCPOptSubnetMask),
+		})
+		if err := dhcp4.Write(c.connection, discover); err != nil {
+			return nil, err
+		}
+
+		// Look for DHCPOFFER packet (TODO: RFC)
+		c.connection.SetDeadline(time.Now().Add(10 * time.Second))
+		for {
+			offer, err := dhcp4.Read(c.connection)
+			if err != nil {
+				return nil, err
+			}
+			if offer == nil {
+				continue // not a DHCPv4 packet
+			}
+			if offer.Xid != discover.Xid {
+				continue // broadcast reply for different DHCP transaction
+			}
+			if !dhcp4.HasMessageType(offer.Options, layers.DHCPMsgTypeOffer) {
+				continue
+			}
+			last = offer
+			break
+		}
 	}
 
-	requestPacket := c.dhcp.RequestPacket(&last)
-	c.addHostname(&requestPacket)
-	c.addClientId(&requestPacket)
-	c.addOptionParameterRequest(&requestPacket, []dhcp4.OptionCode{dhcp4.OptionDomainNameServer, dhcp4.OptionRouter, dhcp4.OptionSubnetMask})
-	requestPacket.PadToMinSize()
-
-	if err := c.dhcp.SendPacket(requestPacket); err != nil {
-		return false, requestPacket, err
+	// Build a DHCPREQUEST packet:
+	request := c.packet(last.Xid, append([]layers.DHCPOption{
+		dhcp4.MessageTypeOpt(layers.DHCPMsgTypeRequest),
+		dhcp4.RequestIPOpt(last.YourClientIP),
+		dhcp4.HostnameOpt(c.hostname),
+		dhcp4.ClientIDOpt(layers.LinkTypeEthernet, c.hardwareAddr),
+		dhcp4.ParamsRequestOpt(
+			layers.DHCPOptDNS,
+			layers.DHCPOptRouter,
+			layers.DHCPOptSubnetMask),
+	}, serverID(last)...))
+	if err := dhcp4.Write(c.connection, request); err != nil {
+		return nil, err
 	}
 
-	acknowledgement, err := c.dhcp.GetAcknowledgement(&requestPacket)
-	if err != nil {
-		return false, acknowledgement, err
+	c.connection.SetDeadline(time.Now().Add(10 * time.Second))
+	for {
+		// Look for DHCPACK packet (described in RFC2131 4.3.1):
+		ack, err := dhcp4.Read(c.connection)
+		if err != nil {
+			return nil, err
+		}
+		if ack == nil {
+			continue // not a DHCPv4 packet
+		}
+		if ack.Xid != request.Xid {
+			continue // broadcast reply for different DHCP transaction
+		}
+		if !dhcp4.HasMessageType(ack.Options, layers.DHCPMsgTypeAck) {
+			continue
+		}
+		return ack, nil
 	}
-
-	acknowledgementOptions := acknowledgement.ParseOptions()
-	if dhcp4.MessageType(acknowledgementOptions[dhcp4.OptionDHCPMessageType][0]) != dhcp4.ACK {
-		c.Ack = nil // start over
-		return false, acknowledgement, nil
-	}
-
-	return true, acknowledgement, nil
 }

@@ -23,7 +23,6 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/d2g/dhcp4client"
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
@@ -182,19 +181,23 @@ type dhcp4conn struct {
 // pcap file input, writing packets to pcap file output (if non-empty).
 //
 // See https://en.wikipedia.org/wiki/Pcap for details on pcap.
-func NewDHCP4Conn(input, output string) (dhcp4client.ConnectionInt, error) {
+func NewDHCP4Conn(input, output string) (net.PacketConn, error) {
 	pcapr, pcapw, err := pcapopen(input, output)
-	return &dhcp4conn{pcapr, pcapw}, err
+	return &dhcp4conn{pcapr: pcapr, pcapw: pcapw}, err
 }
 
-func (r *dhcp4conn) Close() error                         { return nil }
-func (r *dhcp4conn) SetReadTimeout(t time.Duration) error { return nil }
+func (r *dhcp4conn) LocalAddr() net.Addr                { return nil }
+func (r *dhcp4conn) Close() error                       { return nil }
+func (r *dhcp4conn) SetDeadline(t time.Time) error      { return nil }
+func (r *dhcp4conn) SetReadDeadline(t time.Time) error  { return nil }
+func (r *dhcp4conn) SetWriteDeadline(t time.Time) error { return nil }
 
-func (r *dhcp4conn) Write(b []byte) error {
+func (r *dhcp4conn) WriteTo(b []byte, addr net.Addr) (n int, err error) {
 	if r.pcapw == nil {
-		return nil
+		return len(b), nil
 	}
-	return pcapwrite(r.pcapw,
+
+	return len(b), pcapwrite(r.pcapw,
 		&layers.IPv4{
 			Version:  4,
 			TTL:      255,
@@ -209,8 +212,20 @@ func (r *dhcp4conn) Write(b []byte) error {
 		b)
 }
 
-func (r *dhcp4conn) ReadFrom() ([]byte, net.IP, error) {
-	buf := make([]byte, 9000)
-	_, ip, err := readFrom(r.pcapr, buf)
-	return buf, ip, err
+func (r *dhcp4conn) ReadFrom(buf []byte) (int, net.Addr, error) {
+	data, _, err := r.pcapr.ReadPacketData()
+	if err != nil {
+		return 0, nil, err
+	}
+	pkt := gopacket.NewPacket(data, layers.LayerTypeEthernet, gopacket.DecodeOptions{})
+	// TODO: get source IP
+	eth := pkt.Layer(layers.LayerTypeEthernet)
+	if eth == nil {
+		return 0, nil, fmt.Errorf("pcap contained unexpected non-IPv4 packet")
+	}
+
+	//log.Printf("ReadFrom(): %x, %v, pkt = %+v", udp.LayerPayload(), err, pkt)
+	copy(buf, eth.LayerPayload())
+	ip := net.ParseIP("192.168.23.1")
+	return len(eth.LayerPayload()), &net.IPAddr{IP: ip}, nil
 }

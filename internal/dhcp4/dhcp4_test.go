@@ -46,12 +46,9 @@ func TestDHCP4(t *testing.T) {
 		hardwareAddr: mac,
 		timeNow:      func() time.Time { return now },
 		connection:   conn,
-		generateXID: func(b []byte) {
-			if got, want := len(b), 4; got != want {
-				t.Fatalf("github.com/d2g/dhcp4client request unexpected amount of bytes: got %d, want %d", got, want)
-			}
+		generateXID: func() uint32 {
 			// TODO: read the transaction ID from the pcap file
-			copy(b, []byte{0x77, 0x08, 0xd7, 0x24})
+			return 0x7708d724
 		},
 	}
 

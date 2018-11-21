@@ -28,6 +28,9 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/gopacket"
+	"github.com/google/gopacket/layers"
+	"github.com/jpillora/backoff"
 	"github.com/rtr7/router7/internal/dhcp4"
 	"github.com/rtr7/router7/internal/notify"
 	"github.com/rtr7/router7/internal/teelogger"
@@ -45,9 +48,15 @@ func logic() error {
 		return err
 	}
 	const ackFn = "/perm/dhcp4/wire/ack"
-	ack, err := ioutil.ReadFile(ackFn)
+	var ack *layers.DHCPv4
+	ackB, err := ioutil.ReadFile(ackFn)
 	if err != nil && !os.IsNotExist(err) {
 		log.Printf("Loading previous DHCPACK packet from %s: %v", ackFn, err)
+	} else {
+		pkt := gopacket.NewPacket(ackB, layers.LayerTypeDHCPv4, gopacket.DecodeOptions{})
+		if dhcp, ok := pkt.Layer(layers.LayerTypeDHCPv4).(*layers.DHCPv4); ok {
+			ack = dhcp
+		}
 	}
 	c := dhcp4.Client{
 		Interface: iface,
@@ -55,12 +64,20 @@ func logic() error {
 	}
 	usr2 := make(chan os.Signal, 1)
 	signal.Notify(usr2, syscall.SIGUSR2)
+	backoff := backoff.Backoff{
+		Factor: 2,
+		Jitter: true,
+		Min:    10 * time.Second,
+		Max:    1 * time.Minute,
+	}
 	for c.ObtainOrRenew() {
 		if err := c.Err(); err != nil {
-			log.Printf("Temporary error: %v", err)
-			time.Sleep(1 * time.Second)
+			dur := backoff.Duration()
+			log.Printf("Temporary error: %v (waiting %v)", err, dur)
+			time.Sleep(dur)
 			continue
 		}
+		backoff.Reset()
 		log.Printf("lease: %+v", c.Config())
 		b, err := json.Marshal(c.Config())
 		if err != nil {
@@ -69,7 +86,15 @@ func logic() error {
 		if err := ioutil.WriteFile(leasePath, b, 0644); err != nil {
 			return fmt.Errorf("persisting lease to %s: %v", leasePath, err)
 		}
-		if err := ioutil.WriteFile(ackFn, c.Ack, 0644); err != nil {
+		buf := gopacket.NewSerializeBuffer()
+		gopacket.SerializeLayers(buf,
+			gopacket.SerializeOptions{
+				FixLengths:       true,
+				ComputeChecksums: true,
+			},
+			c.Ack,
+		)
+		if err := ioutil.WriteFile(ackFn, buf.Bytes(), 0644); err != nil {
 			return fmt.Errorf("persisting DHCPACK to %s: %v", ackFn, err)
 		}
 		if err := notify.Process("/user/netconfigd", syscall.SIGUSR1); err != nil {
