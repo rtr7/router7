@@ -72,14 +72,14 @@ func TestDHCP(t *testing.T) {
 	s := NewServer("localhost:0", "lan")
 	s.SetLeases([]dhcp4d.Lease{
 		{
-			Hostname: "xps",
+			Hostname: "testtarget",
 			Addr:     net.IP{192, 168, 42, 23},
 		},
 	})
 
-	resolveXps := func(t *testing.T) {
+	resolveTestTarget := func(t *testing.T) {
 		m := new(dns.Msg)
-		m.SetQuestion("xps.lan.", dns.TypeA)
+		m.SetQuestion("testtarget.lan.", dns.TypeA)
 		s.Mux.ServeDNS(r, m)
 		if got, want := len(r.response.Answer), 1; got != want {
 			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
@@ -92,23 +92,23 @@ func TestDHCP(t *testing.T) {
 			t.Fatalf("unexpected response IP: got %v, want %v", got, want)
 		}
 	}
-	t.Run("xps.lan.", resolveXps)
+	t.Run("testtarget.lan.", resolveTestTarget)
 
 	expired := time.Now().Add(-1 * time.Second)
 	s.SetLeases([]dhcp4d.Lease{
 		{
-			Hostname: "xps",
+			Hostname: "testtarget",
 			Addr:     net.IP{192, 168, 42, 23},
 			Expiry:   time.Now().Add(1 * time.Minute),
 		},
 		{
-			Hostname: "xps",
+			Hostname: "testtarget",
 			Addr:     net.IP{192, 168, 42, 150},
 			Expiry:   expired,
 		},
 	})
 
-	t.Run("xps.lan. (expired)", resolveXps)
+	t.Run("testtarget.lan. (expired)", resolveTestTarget)
 
 	t.Run("notfound.lan.", func(t *testing.T) {
 		m := new(dns.Msg)
@@ -293,7 +293,7 @@ func TestDHCPReverse(t *testing.T) {
 			s := NewServer("localhost:0", "lan")
 			s.SetLeases([]dhcp4d.Lease{
 				{
-					Hostname: "xps",
+					Hostname: "testtarget",
 					Addr:     test.ip,
 				},
 			})
@@ -307,7 +307,7 @@ func TestDHCPReverse(t *testing.T) {
 			if _, ok := a.(*dns.PTR); !ok {
 				t.Fatalf("unexpected response type: got %T, want dns.PTR", a)
 			}
-			if got, want := a.(*dns.PTR).Ptr, "xps.lan."; got != want {
+			if got, want := a.(*dns.PTR).Ptr, "testtarget.lan."; got != want {
 				t.Fatalf("unexpected response record: got %q, want %q", got, want)
 			}
 		})
