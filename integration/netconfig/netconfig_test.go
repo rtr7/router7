@@ -15,6 +15,7 @@
 package integration_test
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"os"
@@ -43,6 +44,52 @@ const goldenInterfaces = `
       "spoof_hardware_addr": "02:73:53:00:b0:aa",
       "name": "lan0",
       "addr": "192.168.42.1/24"
+    },
+    {
+      "name": "wg0",
+      "addr": "fe80::1/64"
+    }
+  ]
+}
+`
+
+const goldenWireguard = `
+{
+  "interfaces":[
+    {
+      "name": "wg0",
+      "private_key": "gBCV3afBKfW7RycmeZFMpJykvO+58KfSEIyavay90kE=",
+      "port": 51820,
+      "peers": [
+        {
+          "public_key": "ScxV5nQsUIaaOp3qdwPqRcgMkR3oR6nyi1tBLUovqBs=",
+          "endpoint": "192.168.42.23:12345",
+          "allowed_ips": [
+            "fe80::/64",
+            "10.0.137.0/24"
+          ]
+        },
+        {
+          "public_key": "AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=",
+          "endpoint": "[::1]:12345",
+          "allowed_ips": [
+            "10.0.0.0/8"
+          ]
+        }
+      ]
+    },
+    {
+      "name": "wg1",
+      "private_key": "gBCV3afBKfW7RycmeZFMpJykvO+58KfSEIyavay90kE=",
+      "port": 51820,
+      "peers": [
+        {
+          "public_key": "ScxV5nQsUIaaOp3qdwPqRcgMkR3oR6nyi1tBLUovqBs=",
+          "allowed_ips": [
+            "fe80::/64"
+          ]
+        }
+      ]
     }
   ]
 }
@@ -168,6 +215,7 @@ func TestNetconfig(t *testing.T) {
 			{"dhcp4/wire/lease.json", goldenDhcp4},
 			{"dhcp6/wire/lease.json", goldenDhcp6},
 			{"interfaces.json", goldenInterfaces},
+			{"wireguard.json", goldenWireguard},
 			{"portforwardings.json", pf},
 		} {
 			if err := os.MkdirAll(filepath.Join(tmp, filepath.Dir(golden.filename)), 0755); err != nil {
@@ -281,6 +329,45 @@ func TestNetconfig(t *testing.T) {
 		if diff := cmp.Diff(routes, wantRoutes); diff != "" {
 			t.Fatalf("routes: diff (-got +want):\n%s", diff)
 		}
+	})
+
+	t.Run("VerifyWireguard", func(t *testing.T) {
+		var stderr bytes.Buffer
+		wg := exec.Command("ip", "netns", "exec", ns, "wg", "show", "wg0")
+		wg.Stderr = &stderr
+		out, err := wg.Output()
+		if err != nil {
+			t.Fatalf("%v: %v (stderr: %v)", wg.Args, err, strings.TrimSpace(stderr.String()))
+		}
+		const want = `interface: wg0
+  public key: 3ck9nX4ylfXm0fq4pWJ9n8Jku4fvzIXBVe3BsCNldB8=
+  private key: (hidden)
+  listening port: 51820
+
+peer: ScxV5nQsUIaaOp3qdwPqRcgMkR3oR6nyi1tBLUovqBs=
+  endpoint: 192.168.42.23:12345
+  allowed ips: 10.0.137.0/24, fe80::/64
+
+peer: AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=
+  endpoint: [::1]:12345
+  allowed ips: 10.0.0.0/8`
+		if got := strings.TrimSpace(string(out)); got != want {
+			t.Fatalf("unexpected wg output: diff (-want +got):\n%s", diff.LineDiff(want, got))
+		}
+
+		out, err = exec.Command("ip", "-netns", ns, "address", "show", "dev", "wg0").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		upRe := regexp.MustCompile(`wg0: <[^>]+,UP`)
+		if !upRe.MatchString(string(out)) {
+			t.Errorf("regexp %s does not match %s", upRe, string(out))
+		}
+		addr6Re := regexp.MustCompile(`(?m)^\s*inet6 fe80::1/64 scope link\s*$`)
+		if !addr6Re.MatchString(string(out)) {
+			t.Errorf("regexp %s does not match %s", addr6Re, string(out))
+		}
+
 	})
 
 	opts := []cmp.Option{

@@ -214,12 +214,14 @@ func applyInterfaces(dir, root string) error {
 	if err := json.Unmarshal(b, &cfg); err != nil {
 		return err
 	}
+	byName := make(map[string]InterfaceDetails)
 	byHardwareAddr := make(map[string]InterfaceDetails)
 	for _, details := range cfg.Interfaces {
 		byHardwareAddr[details.HardwareAddr] = details
 		if spoof := details.SpoofHardwareAddr; spoof != "" {
 			byHardwareAddr[spoof] = details
 		}
+		byName[details.Name] = details
 	}
 	links, err := netlink.LinkList()
 	for _, l := range links {
@@ -227,13 +229,21 @@ func applyInterfaces(dir, root string) error {
 		// TODO: prefix log line with details about the interface.
 		// link &{LinkAttrs:{Index:2 MTU:1500 TxQLen:1000 Name:eth0 HardwareAddr:00:0d:b9:49:70:18 Flags:broadcast|multicast RawFlags:4098 ParentIndex:0 MasterIndex:0 Namespace:<nil> Alias: Statistics:0xc4200f45f8 Promisc:0 Xdp:0xc4200ca180 EncapType:ether Protinfo:<nil> OperState:down NetNsID:0 NumTxQueues:0 NumRxQueues:0 Vfs:[]}}, attr &{Index:2 MTU:1500 TxQLen:1000 Name:eth0 HardwareAddr:00:0d:b9:49:70:18 Flags:broadcast|multicast RawFlags:4098 ParentIndex:0 MasterIndex:0 Namespace:<nil> Alias: Statistics:0xc4200f45f8 Promisc:0 Xdp:0xc4200ca180 EncapType:ether Protinfo:<nil> OperState:down NetNsID:0 NumTxQueues:0 NumRxQueues:0 Vfs:[]}
 
+		var (
+			details InterfaceDetails
+			ok      bool
+		)
 		addr := attr.HardwareAddr.String()
-		details, ok := byHardwareAddr[addr]
-		if !ok {
-			if addr == "" {
+		if addr == "" {
+			details, ok = byName[attr.Name]
+			if !ok {
 				continue // not a configurable interface (e.g. sit0)
 			}
-			log.Printf("no config for hardwareattr %s", addr)
+		} else {
+			details, ok = byHardwareAddr[addr]
+		}
+		if !ok {
+			log.Printf("no config for interface %s/%s", attr.Name, addr)
 			continue
 		}
 		log.Printf("apply details %+v", details)
@@ -730,6 +740,10 @@ func Apply(dir, root string) error {
 
 	if err := applyFirewall(dir); err != nil {
 		return fmt.Errorf("firewall: %v", err)
+	}
+
+	if err := applyWireGuard(dir); err != nil {
+		return fmt.Errorf("wireguard: %v", err)
 	}
 
 	return firstErr
