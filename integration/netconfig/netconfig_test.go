@@ -26,6 +26,7 @@ import (
 
 	"github.com/rtr7/router7/internal/netconfig"
 
+	"github.com/andreyvit/diff"
 	"github.com/google/go-cmp/cmp"
 	"github.com/google/nftables"
 )
@@ -47,42 +48,26 @@ const goldenInterfaces = `
 }
 `
 
-const goldenPortForwardings = `
-{
-  "forwardings":[
-    {
-      "port": "8080",
-      "dest_addr": "192.168.42.23",
-      "dest_port": "9999"
-    },
-    {
-      "port": "8040-8060",
-      "dest_addr": "192.168.42.99",
-      "dest_port": "8040-8060"
-    },
-    {
-      "proto": "udp",
-      "port": "53",
-      "dest_addr": "192.168.42.99",
-      "dest_port": "53"
-    }
-  ]
-}
-`
-
-const additionalPortForwardings = `
-{
-  "forwardings":[
-    {
-      "port": "8080",
-      "dest_addr": "192.168.42.23",
-      "dest_port": "9999"
-    },
+func goldenPortForwardings(additionalForwarding bool) string {
+	add := ""
+	if additionalForwarding {
+		add = `
     {
       "port": "8045",
       "dest_addr": "192.168.42.22",
       "dest_port": "8045"
     },
+`
+	}
+	return `
+{
+  "forwardings":[
+    {
+      "port": "8080",
+      "dest_addr": "192.168.42.23",
+      "dest_port": "9999"
+    },
+` + add + `
     {
       "port": "8040-8060",
       "dest_addr": "192.168.42.99",
@@ -97,6 +82,50 @@ const additionalPortForwardings = `
   ]
 }
 `
+}
+
+func goldenNftablesRules(additionalForwarding bool) string {
+	add := ""
+	if additionalForwarding {
+		add = `
+		iifname "uplink0" tcp dport 8045 dnat to 192.168.42.22:8045`
+	}
+	return `table ip nat {
+	chain prerouting {
+		type nat hook prerouting priority 0; policy accept;
+		iifname "uplink0" udp dport domain dnat to 192.168.42.99:domain
+		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060` + add + `
+		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999
+	}
+
+	chain postrouting {
+		type nat hook postrouting priority 100; policy accept;
+		oifname "uplink0" masquerade
+	}
+}
+table ip filter {
+	counter fwded {
+		packets 23 bytes 42
+	}
+
+	chain forward {
+		type filter hook forward priority 0; policy accept;
+		counter name "fwded"
+		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu
+	}
+}
+table ip6 filter {
+	counter fwded {
+		packets 23 bytes 42
+	}
+
+	chain forward {
+		type filter hook forward priority 0; policy accept;
+		counter name "fwded"
+		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu
+	}
+}`
+}
 
 const goldenDhcp4 = `
 {
@@ -132,10 +161,7 @@ func TestNetconfig(t *testing.T) {
 		}
 		defer os.RemoveAll(tmp)
 
-		pf := goldenPortForwardings
-		if os.Getenv("ADDITIONAL_PORT_FORWARDINGS") == "1" {
-			pf = additionalPortForwardings
-		}
+		pf := goldenPortForwardings(os.Getenv("ADDITIONAL_PORT_FORWARDINGS") == "1")
 		for _, golden := range []struct {
 			filename, content string
 		}{
@@ -213,104 +239,70 @@ func TestNetconfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	link, err := exec.Command("ip", "-netns", ns, "link", "show", "dev", "lan0").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(link), "link/ether 02:73:53:00:b0:aa") {
-		t.Errorf("lan0 MAC address is not 02:73:53:00:b0:aa")
-	}
+	t.Run("VerifyAddresses", func(t *testing.T) {
+		link, err := exec.Command("ip", "-netns", ns, "link", "show", "dev", "lan0").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(link), "link/ether 02:73:53:00:b0:aa") {
+			t.Errorf("lan0 MAC address is not 02:73:53:00:b0:aa")
+		}
 
-	addrs, err := exec.Command("ip", "-netns", ns, "address", "show", "dev", "uplink0").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
+		addrs, err := exec.Command("ip", "-netns", ns, "address", "show", "dev", "uplink0").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	addrRe := regexp.MustCompile(`(?m)^\s*inet 85.195.207.62/25 brd 85.195.207.127 scope global uplink0$`)
-	if !addrRe.MatchString(string(addrs)) {
-		t.Fatalf("regexp %s does not match %s", addrRe, string(addrs))
-	}
+		addrRe := regexp.MustCompile(`(?m)^\s*inet 85.195.207.62/25 brd 85.195.207.127 scope global uplink0$`)
+		if !addrRe.MatchString(string(addrs)) {
+			t.Fatalf("regexp %s does not match %s", addrRe, string(addrs))
+		}
 
-	addrsLan, err := exec.Command("ip", "-netns", ns, "address", "show", "dev", "lan0").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	addr6Re := regexp.MustCompile(`(?m)^\s*inet6 2a02:168:4a00::1/64 scope global\s*$`)
-	if !addr6Re.MatchString(string(addrsLan)) {
-		t.Fatalf("regexp %s does not match %s", addr6Re, string(addrsLan))
-	}
+		addrsLan, err := exec.Command("ip", "-netns", ns, "address", "show", "dev", "lan0").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		addr6Re := regexp.MustCompile(`(?m)^\s*inet6 2a02:168:4a00::1/64 scope global\s*$`)
+		if !addr6Re.MatchString(string(addrsLan)) {
+			t.Fatalf("regexp %s does not match %s", addr6Re, string(addrsLan))
+		}
 
-	wantRoutes := []string{
-		"default via 85.195.207.1 proto dhcp src 85.195.207.62 ",
-		"85.195.207.0/25 proto kernel scope link src 85.195.207.62 ",
-		"85.195.207.1 proto dhcp scope link src 85.195.207.62",
-	}
+		wantRoutes := []string{
+			"default via 85.195.207.1 proto dhcp src 85.195.207.62 ",
+			"85.195.207.0/25 proto kernel scope link src 85.195.207.62 ",
+			"85.195.207.1 proto dhcp scope link src 85.195.207.62",
+		}
 
-	routes, err := ipLines("-netns", ns, "route", "show", "dev", "uplink0")
-	if err != nil {
-		t.Fatal(err)
-	}
+		routes, err := ipLines("-netns", ns, "route", "show", "dev", "uplink0")
+		if err != nil {
+			t.Fatal(err)
+		}
 
-	if diff := cmp.Diff(routes, wantRoutes); diff != "" {
-		t.Fatalf("routes: diff (-got +want):\n%s", diff)
-	}
+		if diff := cmp.Diff(routes, wantRoutes); diff != "" {
+			t.Fatalf("routes: diff (-got +want):\n%s", diff)
+		}
+	})
 
-	rules, err := ipLines("netns", "exec", ns, "nft", "list", "ruleset")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for n, rule := range rules {
-		t.Logf("rule %d: %s", n, rule)
-	}
-	if len(rules) < 2 {
-		t.Fatalf("nftables rules not found")
-	}
-	wantRules := []string{
-		`table ip nat {`,
-		`	chain prerouting {`,
-		`		type nat hook prerouting priority 0; policy accept;`,
-		`		iifname "uplink0" udp dport domain dnat to 192.168.42.99:domain`,
-		`		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060`,
-		`		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999`,
-		`	}`,
-		``,
-		`	chain postrouting {`,
-		`		type nat hook postrouting priority 100; policy accept;`,
-		`		oifname "uplink0" masquerade`,
-		`	}`,
-		`}`,
-		`table ip filter {`,
-		`   counter fwded {`,
-		`       packets 23 bytes 42`,
-		`   }`,
-		``,
-		`	chain forward {`,
-		`		type filter hook forward priority 0; policy accept;`,
-		`		counter name "fwded"`,
-		`		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu`,
-		`	}`,
-		`}`,
-		`table ip6 filter {`,
-		`   counter fwded {`,
-		`       packets 23 bytes 42`,
-		`   }`,
-		``,
-		`	chain forward {`,
-		`		type filter hook forward priority 0; policy accept;`,
-		`		counter name "fwded"`,
-		`		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu`,
-		`	}`,
-		`}`,
-	}
 	opts := []cmp.Option{
 		cmp.Transformer("formatting", func(line string) string {
 			return strings.TrimSpace(strings.Replace(line, "dnat to", "dnat", -1))
 		}),
 	}
 
-	if diff := cmp.Diff(rules, wantRules, opts...); diff != "" {
-		t.Fatalf("unexpected nftables rules: diff (-got +want):\n%s", diff)
-	}
+	t.Run("VerifyNftables", func(t *testing.T) {
+		rules, err := ipLines("netns", "exec", ns, "nft", "list", "ruleset")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rules) < 2 {
+			t.Fatalf("nftables rules not found")
+		}
+
+		got := strings.Join(rules, "\n")
+		if diff := cmp.Diff(got, goldenNftablesRules(false), opts...); diff != "" {
+			t.Fatalf("unexpected nftables rules: diff (-got +want):\n%s", diff)
+		}
+	})
 
 	cmd = exec.Command("ip", "netns", "exec", ns, os.Args[0], "-test.run=^TestNetconfig$")
 	cmd.Env = append(os.Environ(), "HELPER_PROCESS=1", "ADDITIONAL_PORT_FORWARDINGS=1")
@@ -320,58 +312,19 @@ func TestNetconfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	rules, err = ipLines("netns", "exec", ns, "nft", "list", "ruleset")
-	if err != nil {
-		t.Fatal(err)
-	}
-	for n, rule := range rules {
-		t.Logf("rule %d: %s", n, rule)
-	}
-	if len(rules) < 2 {
-		t.Fatalf("nftables rules not found")
-	}
+	t.Run("VerifyAdditionalNftables", func(t *testing.T) {
+		rules, err := ipLines("netns", "exec", ns, "nft", "list", "ruleset")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if len(rules) < 2 {
+			t.Fatalf("nftables rules not found")
+		}
 
-	wantRules = []string{
-		`table ip nat {`,
-		`	chain prerouting {`,
-		`		type nat hook prerouting priority 0; policy accept;`,
-		`		iifname "uplink0" udp dport domain dnat to 192.168.42.99:domain`,
-		`		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060`,
-		`		iifname "uplink0" tcp dport 8045 dnat to 192.168.42.22:8045`,
-		`		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999`,
-		`	}`,
-		``,
-		`	chain postrouting {`,
-		`		type nat hook postrouting priority 100; policy accept;`,
-		`		oifname "uplink0" masquerade`,
-		`	}`,
-		`}`,
-		`table ip filter {`,
-		`   counter fwded {`,
-		`       packets 23 bytes 42`,
-		`   }`,
-		``,
-		`	chain forward {`,
-		`		type filter hook forward priority 0; policy accept;`,
-		`		counter name "fwded"`,
-		`		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu`,
-		`	}`,
-		`}`,
-		`table ip6 filter {`,
-		`   counter fwded {`,
-		`       packets 23 bytes 42`,
-		`   }`,
-		``,
-		`	chain forward {`,
-		`		type filter hook forward priority 0; policy accept;`,
-		`		counter name "fwded"`,
-		`		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu`,
-		`	}`,
-		`}`,
-	}
-	if diff := cmp.Diff(rules, wantRules, opts...); diff != "" {
-		t.Fatalf("unexpected nftables rules: diff (-got +want):\n%s", diff)
-	}
+		if got, want := strings.Join(rules, "\n"), goldenNftablesRules(true); got != want {
+			t.Fatalf("unexpected nftables rules: diff (-want +got):\n%s", diff.LineDiff(want, got))
+		}
+	})
 }
 
 func ipLines(args ...string) ([]string, error) {
