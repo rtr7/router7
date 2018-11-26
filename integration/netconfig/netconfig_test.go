@@ -193,10 +193,10 @@ func TestNetconfig(t *testing.T) {
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
 	nsSetup := []*exec.Cmd{
-		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "dummy0", "type", "dummy"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "link", "add", "lan0", "type", "dummy"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "dummy0", "address", "02:73:53:00:ca:fe"),
-		exec.Command("ip", "netns", "exec", ns, "ip", "link", "set", "lan0", "address", "02:73:53:00:b0:0c"),
+		exec.Command("ip", "-netns", ns, "link", "add", "dummy0", "type", "dummy"),
+		exec.Command("ip", "-netns", ns, "link", "add", "lan0", "type", "dummy"),
+		exec.Command("ip", "-netns", ns, "link", "set", "dummy0", "address", "02:73:53:00:ca:fe"),
+		exec.Command("ip", "-netns", ns, "link", "set", "lan0", "address", "02:73:53:00:b0:0c"),
 	}
 
 	for _, cmd := range nsSetup {
@@ -213,7 +213,7 @@ func TestNetconfig(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	link, err := exec.Command("ip", "netns", "exec", ns, "ip", "link", "show", "dev", "lan0").Output()
+	link, err := exec.Command("ip", "-netns", ns, "link", "show", "dev", "lan0").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestNetconfig(t *testing.T) {
 		t.Errorf("lan0 MAC address is not 02:73:53:00:b0:aa")
 	}
 
-	addrs, err := exec.Command("ip", "netns", "exec", ns, "ip", "address", "show", "dev", "uplink0").Output()
+	addrs, err := exec.Command("ip", "-netns", ns, "address", "show", "dev", "uplink0").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -231,7 +231,7 @@ func TestNetconfig(t *testing.T) {
 		t.Fatalf("regexp %s does not match %s", addrRe, string(addrs))
 	}
 
-	addrsLan, err := exec.Command("ip", "netns", "exec", ns, "ip", "address", "show", "dev", "lan0").Output()
+	addrsLan, err := exec.Command("ip", "-netns", ns, "address", "show", "dev", "lan0").Output()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -246,7 +246,7 @@ func TestNetconfig(t *testing.T) {
 		"85.195.207.1 proto dhcp scope link src 85.195.207.62",
 	}
 
-	routes, err := ipLines("netns", "exec", ns, "ip", "route", "show", "dev", "uplink0")
+	routes, err := ipLines("-netns", ns, "route", "show", "dev", "uplink0")
 	if err != nil {
 		t.Fatal(err)
 	}
