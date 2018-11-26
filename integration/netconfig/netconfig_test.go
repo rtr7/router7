@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"fmt"
 	"io/ioutil"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -26,6 +27,7 @@ import (
 	"testing"
 
 	"github.com/rtr7/router7/internal/netconfig"
+	"github.com/vishvananda/netlink"
 
 	"github.com/andreyvit/diff"
 	"github.com/google/go-cmp/cmp"
@@ -200,6 +202,30 @@ const goldenDhcp6 = `
 }
 `
 
+type wgLink struct{}
+
+func (w *wgLink) Type() string { return "wireguard" }
+
+func (w *wgLink) Attrs() *netlink.LinkAttrs {
+	attrs := netlink.NewLinkAttrs()
+	attrs.Name = "wg5"
+	return &attrs
+}
+
+var wireGuardAvailable = func() bool {
+	// ns must not collide with any namespace used in the test functions: this
+	// function will be called by the helper process, too.
+	const ns = "ns4"
+	add := exec.Command("ip", "netns", "add", ns)
+	add.Stderr = os.Stderr
+	if err := add.Run(); err != nil {
+		log.Fatalf("%v: %v", add.Args, err)
+	}
+	defer exec.Command("ip", "netns", "delete", ns).Run()
+
+	return netlink.LinkAdd(&wgLink{}) == nil
+}()
+
 func TestNetconfig(t *testing.T) {
 	if os.Getenv("HELPER_PROCESS") == "1" {
 		tmp, err := ioutil.TempDir("", "router7")
@@ -215,13 +241,17 @@ func TestNetconfig(t *testing.T) {
 			{"dhcp4/wire/lease.json", goldenDhcp4},
 			{"dhcp6/wire/lease.json", goldenDhcp6},
 			{"interfaces.json", goldenInterfaces},
-			{"wireguard.json", goldenWireguard},
 			{"portforwardings.json", pf},
 		} {
 			if err := os.MkdirAll(filepath.Join(tmp, filepath.Dir(golden.filename)), 0755); err != nil {
 				t.Fatal(err)
 			}
 			if err := ioutil.WriteFile(filepath.Join(tmp, golden.filename), []byte(golden.content), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if wireGuardAvailable {
+			if err := ioutil.WriteFile(filepath.Join(tmp, "wireguard.json"), []byte(goldenWireguard), 0600); err != nil {
 				t.Fatal(err)
 			}
 		}
@@ -332,6 +362,9 @@ func TestNetconfig(t *testing.T) {
 	})
 
 	t.Run("VerifyWireguard", func(t *testing.T) {
+		if !wireGuardAvailable {
+			t.Skipf("WireGuard not available on this machine")
+		}
 		var stderr bytes.Buffer
 		wg := exec.Command("ip", "netns", "exec", ns, "wg", "show", "wg0")
 		wg.Stderr = &stderr
