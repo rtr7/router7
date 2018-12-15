@@ -171,16 +171,15 @@ func (d *ping6gw) Evaluate() (string, error) {
 	}
 	addr, err := net.ResolveIPAddr("ip6", gw)
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("net.ResolveIPAddr(%s): %v", gw, err)
 	}
 	p, err := ping.New("", "::")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("ping.New(::): %v", err)
 	}
 	rtt, err := p.Ping(addr, timeout)
 	if err != nil {
-		return "", err
-		//return fmt.Errorf("%s did not respond within %v", gw, timeout)
+		return "", fmt.Errorf("ping6(%v, %v): %v", addr, timeout, err)
 	}
 	return formatRTT(rtt) + " from " + gw, nil
 }
