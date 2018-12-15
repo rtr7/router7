@@ -7,7 +7,7 @@ services:
 
 language: go
 go:
-  - "1.10"
+  - "1.11"
 
 install:
   - go get -t -v -d ./...
