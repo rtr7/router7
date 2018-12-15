@@ -49,7 +49,7 @@ type Handler struct {
 	leaseRange  int    // number of IP addresses to hand out
 	leasePeriod time.Duration
 	options     dhcp4.Options
-	leasesHW    map[string]*Lease
+	leasesHW    map[string]int // points into leasesIP
 	leasesIP    map[int]*Lease
 	rawConn     net.PacketConn
 	iface       *net.Interface
@@ -84,7 +84,7 @@ func NewHandler(dir string, iface *net.Interface, conn net.PacketConn) (*Handler
 	return &Handler{
 		rawConn:     conn,
 		iface:       iface,
-		leasesHW:    make(map[string]*Lease),
+		leasesHW:    make(map[string]int),
 		leasesIP:    make(map[int]*Lease),
 		serverIP:    serverIP,
 		start:       start,
@@ -105,10 +105,10 @@ func NewHandler(dir string, iface *net.Interface, conn net.PacketConn) (*Handler
 // loaded from persistent storage. There is no locking, so SetLeases must be
 // called before Serve.
 func (h *Handler) SetLeases(leases []*Lease) {
-	h.leasesHW = make(map[string]*Lease)
+	h.leasesHW = make(map[string]int)
 	h.leasesIP = make(map[int]*Lease)
 	for _, l := range leases {
-		h.leasesHW[l.HardwareAddr] = l
+		h.leasesHW[l.HardwareAddr] = l.Num
 		h.leasesIP[l.Num] = l
 	}
 }
@@ -204,6 +204,15 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 	return nil
 }
 
+func (h *Handler) leaseHW(hwAddr string) (*Lease, bool) {
+	num, ok := h.leasesHW[hwAddr]
+	if !ok {
+		return nil, false
+	}
+	l, ok := h.leasesIP[num]
+	return l, ok
+}
+
 // TODO: is ServeDHCP always run from the same goroutine, or do we need locking?
 func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options dhcp4.Options) dhcp4.Packet {
 	reqIP := net.IP(options[dhcp4.OptionRequestedIPAddress])
@@ -223,7 +232,7 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		}
 
 		// offer previous lease for this HardwareAddr, if any
-		if lease, ok := h.leasesHW[hwAddr]; ok && !lease.Expired(h.timeNow()) {
+		if lease, ok := h.leaseHW(hwAddr); ok && !lease.Expired(h.timeNow()) {
 			free = lease.Num
 			//log.Printf("h.leasesHW[%s] = %d", hwAddr, free)
 		}
@@ -258,12 +267,12 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			Num:          leaseNum,
 			Addr:         make([]byte, 4),
 			HardwareAddr: p.CHAddr().String(),
-			Expiry:       time.Now().Add(h.leasePeriod),
+			Expiry:       h.timeNow().Add(h.leasePeriod),
 			Hostname:     string(options[dhcp4.OptionHostName]),
 		}
 		copy(lease.Addr, reqIP.To4())
 
-		if l, ok := h.leasesHW[lease.HardwareAddr]; ok {
+		if l, ok := h.leaseHW(lease.HardwareAddr); ok {
 			if l.Expiry.IsZero() {
 				// Retain permanent lease properties
 				lease.Expiry = time.Time{}
@@ -275,7 +284,7 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		}
 
 		h.leasesIP[leaseNum] = lease
-		h.leasesHW[lease.HardwareAddr] = lease
+		h.leasesHW[lease.HardwareAddr] = leaseNum
 		if h.Leases != nil {
 			var leases []*Lease
 			for _, l := range h.leasesIP {

@@ -26,13 +26,18 @@ import (
 	"github.com/krolaw/dhcp4"
 )
 
+func messageType(p dhcp4.Packet) dhcp4.MessageType {
+	opts := p.ParseOptions()
+	return dhcp4.MessageType(opts[dhcp4.OptionDHCPMessageType][0])
+}
+
 func packet(mt dhcp4.MessageType, addr net.IP, hwaddr net.HardwareAddr, opts []dhcp4.Option) dhcp4.Packet {
 	return dhcp4.RequestPacket(
 		mt,
-		hwaddr, // MAC address
-		addr,   // requested IP address
+		hwaddr,                         // MAC address
+		addr,                           // requested IP address
 		[]byte{0xaa, 0xbb, 0xcc, 0xdd}, // transaction ID
-		false, // broadcast,
+		false,                          // broadcast,
 		opts,
 	)
 }
@@ -119,10 +124,10 @@ func TestLease(t *testing.T) {
 	}
 	p := dhcp4.RequestPacket(
 		dhcp4.Request,
-		hardwareAddr, // MAC address
-		addr,         // requested IP address
+		hardwareAddr,                   // MAC address
+		addr,                           // requested IP address
 		[]byte{0xaa, 0xbb, 0xcc, 0xdd}, // transaction ID
-		false, // broadcast,
+		false,                          // broadcast,
 		[]dhcp4.Option{
 			{
 				Code:  dhcp4.OptionHostName,
@@ -169,7 +174,7 @@ func TestPreferredAddress(t *testing.T) {
 			hardwareAddr,                   // MAC address
 			net.IPv4zero,                   // requested IP address
 			[]byte{0xaa, 0xbb, 0xcc, 0xdd}, // transaction ID
-			false, // broadcast,
+			false,                          // broadcast,
 			[]dhcp4.Option{
 				{
 					Code:  dhcp4.OptionHostName,
@@ -201,8 +206,7 @@ func TestPoolBoundaries(t *testing.T) {
 		addr[len(addr)-1] = last
 		p := request(addr, hardwareAddr)
 		resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-		opts := resp.ParseOptions()
-		if got, want := dhcp4.MessageType(opts[dhcp4.OptionDHCPMessageType][0]), dhcp4.NAK; got != want {
+		if got, want := messageType(resp), dhcp4.NAK; got != want {
 			t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
 		}
 	}
@@ -228,8 +232,7 @@ func TestPreviousLease(t *testing.T) {
 
 	p = request(addr1, hardwareAddr2)
 	resp = handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-	opts := resp.ParseOptions()
-	if got, want := dhcp4.MessageType(opts[dhcp4.OptionDHCPMessageType][0]), dhcp4.NAK; got != want {
+	if got, want := messageType(resp), dhcp4.NAK; got != want {
 		t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
 	}
 
@@ -285,8 +288,7 @@ func TestPermanentLease(t *testing.T) {
 
 	p = request(addr, hardwareAddr)
 	resp = handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-	opts := resp.ParseOptions()
-	if got, want := dhcp4.MessageType(opts[dhcp4.OptionDHCPMessageType][0]), dhcp4.NAK; got != want {
+	if got, want := messageType(resp), dhcp4.NAK; got != want {
 		t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
 	}
 }
@@ -335,8 +337,7 @@ func TestExpiration(t *testing.T) {
 			hardwareAddr[len(hardwareAddr)-1] = addr[len(addr)-1] - 1
 			p := request(addr, hardwareAddr)
 			resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-			opts := resp.ParseOptions()
-			if got, want := dhcp4.MessageType(opts[dhcp4.OptionDHCPMessageType][0]), dhcp4.NAK; got != want {
+			if got, want := messageType(resp), dhcp4.NAK; got != want {
 				t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
 			}
 		}
@@ -360,6 +361,46 @@ func TestExpiration(t *testing.T) {
 			if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
 				t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
 			}
+		}
+	})
+}
+
+func TestRequestExpired(t *testing.T) {
+	handler, cleanup := testHandler(t)
+	defer cleanup()
+	now := time.Now()
+	handler.timeNow = func() time.Time { return now }
+
+	addr := net.IP{192, 168, 42, 23}
+
+	hardwareAddr := map[string]net.HardwareAddr{
+		"xps": net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66},
+		"mbp": net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff},
+	}
+
+	t.Run("mbp grabs an address", func(t *testing.T) {
+		p := request(addr, hardwareAddr["mbp"])
+		resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
+		if got, want := messageType(resp), dhcp4.ACK; got != want {
+			t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
+		}
+	})
+
+	now = now.Add(3 * time.Hour)
+
+	t.Run("xps grabs the same address", func(t *testing.T) {
+		p := request(addr, hardwareAddr["xps"])
+		resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
+		if got, want := messageType(resp), dhcp4.ACK; got != want {
+			t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("mbp requests its old address", func(t *testing.T) {
+		p := request(addr, hardwareAddr["mbp"])
+		resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
+		if got, want := messageType(resp), dhcp4.NAK; got != want {
+			t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
 		}
 	})
 }
