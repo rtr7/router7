@@ -17,6 +17,7 @@ package dhcp4
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"net"
 	"sync"
@@ -78,6 +79,8 @@ func (c *Client) packet(xid uint32, opts []layers.DHCPOption) *layers.DHCPv4 {
 	}
 }
 
+var errNAK = errors.New("received DHCPNAK")
+
 // ObtainOrRenew returns false when encountering a permanent error.
 func (c *Client) ObtainOrRenew() bool {
 	var onceErr error
@@ -124,6 +127,9 @@ func (c *Client) ObtainOrRenew() bool {
 		if errno, ok := err.(syscall.Errno); ok && errno == syscall.EAGAIN {
 			c.err = fmt.Errorf("DHCP: timeout (server(s) unreachable)")
 			return true // temporary error
+		}
+		if err == errNAK {
+			c.Ack = nil // start over at DHCPDISCOVER
 		}
 		c.err = fmt.Errorf("DHCP: %v", err)
 		return true // temporary error
@@ -237,6 +243,9 @@ func (c *Client) dhcpRequest() (*layers.DHCPv4, error) {
 			continue // broadcast reply for different DHCP transaction
 		}
 		if !dhcp4.HasMessageType(ack.Options, layers.DHCPMsgTypeAck) {
+			if dhcp4.HasMessageType(ack.Options, layers.DHCPMsgTypeNak) {
+				return nil, errNAK
+			}
 			continue
 		}
 		return ack, nil
