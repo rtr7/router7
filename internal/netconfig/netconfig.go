@@ -678,16 +678,17 @@ func applyFirewall(dir string) error {
 }
 
 func applySysctl() error {
-	if err := ioutil.WriteFile("/proc/sys/net/ipv4/ip_forward", []byte("1"), 0644); err != nil {
-		return fmt.Errorf("sysctl(net.ipv4.ip_forward=1): %v", err)
-	}
-
-	if err := ioutil.WriteFile("/proc/sys/net/ipv6/conf/all/forwarding", []byte("1"), 0644); err != nil {
-		return fmt.Errorf("sysctl(net.ipv6.conf.all.forwarding=1): %v", err)
-	}
-
-	if err := ioutil.WriteFile("/proc/sys/net/ipv6/conf/uplink0/accept_ra", []byte("2"), 0644); err != nil {
-		return fmt.Errorf("sysctl(net.ipv6.conf.uplink0.accept_ra=2): %v", err)
+	for _, ctl := range []string{
+		"net.ipv4.ip_forward=1",
+		"net.ipv6.conf.all.forwarding=1",
+		"net.ipv6.conf.uplink0.accept_ra=2",
+	} {
+		idx := strings.Index(ctl, "=")
+		key, val := ctl[:idx], ctl[idx+1:]
+		fn := strings.Replace(key, ".", "/", -1)
+		if err := ioutil.WriteFile("/proc/sys/"+fn, []byte(val), 0644); err != nil {
+			return fmt.Errorf("sysctl(%v=%v): %v", key, val, err)
+		}
 	}
 
 	return nil
