@@ -403,6 +403,14 @@ func TestRequestExpired(t *testing.T) {
 			t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
 		}
 	})
+
+	t.Run("mbp requests any", func(t *testing.T) {
+		p := request(addr, hardwareAddr["mbp"])
+		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
+		if got, want := resp.YIAddr().To4(), addr.To4(); bytes.Equal(got, want) {
+			t.Errorf("DHCPOFFER for wrong IP: got offered %v (in use!)", got)
+		}
+	})
 }
 
 func TestServerID(t *testing.T) {

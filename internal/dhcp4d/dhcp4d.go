@@ -210,7 +210,7 @@ func (h *Handler) leaseHW(hwAddr string) (*Lease, bool) {
 		return nil, false
 	}
 	l, ok := h.leasesIP[num]
-	return l, ok
+	return l, ok && l.HardwareAddr == hwAddr
 }
 
 // TODO: is ServeDHCP always run from the same goroutine, or do we need locking?
