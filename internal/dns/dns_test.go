@@ -208,6 +208,18 @@ func TestHostnameDHCP(t *testing.T) {
 			t.Fatalf("unexpected response record: got %q, want %q", got, want)
 		}
 	})
+
+	t.Run("AAAA", func(t *testing.T) {
+		m := new(dns.Msg)
+		m.SetQuestion(hostname+".lan.", dns.TypeAAAA)
+		s.Mux.ServeDNS(r, m)
+		if got, want := r.response.MsgHdr.Rcode, dns.RcodeSuccess; got != want {
+			t.Fatalf("unexpected rcode: got %v, want %v", got, want)
+		}
+		if got, want := len(r.response.Answer), 0; got != want {
+			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
+		}
+	})
 }
 
 func TestLocalhost(t *testing.T) {

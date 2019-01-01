@@ -16,6 +16,7 @@
 package dns
 
 import (
+	"errors"
 	"log"
 	"net"
 	"net/http"
@@ -193,7 +194,9 @@ func isLocalInAddrArpa(q string) bool {
 	return local
 }
 
-func (s *Server) resolve(q dns.Question) (dns.RR, error) {
+var sentinelEmpty = errors.New("no answers")
+
+func (s *Server) resolve(q dns.Question) (rr dns.RR, err error) {
 	if q.Qclass != dns.ClassINET {
 		return nil, nil
 	}
@@ -205,11 +208,16 @@ func (s *Server) resolve(q dns.Question) (dns.RR, error) {
 			return dns.NewRR(q.Name + " 3600 IN A 127.0.0.1")
 		}
 	}
-	if q.Qtype == dns.TypeA {
+	if q.Qtype == dns.TypeA ||
+		q.Qtype == dns.TypeAAAA ||
+		q.Qtype == dns.TypeMX {
 		name := strings.TrimSuffix(q.Name, ".")
 		name = strings.TrimSuffix(name, "."+s.domain)
 		if host, ok := s.hostByName(name); ok {
-			return dns.NewRR(q.Name + " 3600 IN A " + host)
+			if q.Qtype == dns.TypeA {
+				return dns.NewRR(q.Name + " 3600 IN A " + host)
+			}
+			return nil, sentinelEmpty
 		}
 	}
 	if q.Qtype == dns.TypePTR {
@@ -232,6 +240,12 @@ func (s *Server) handleInternal(w dns.ResponseWriter, r *dns.Msg) {
 	}
 	rr, err := s.resolve(r.Question[0])
 	if err != nil {
+		if err == sentinelEmpty {
+			m := new(dns.Msg)
+			m.SetReply(r)
+			w.WriteMsg(m)
+			return
+		}
 		log.Fatal(err)
 	}
 	if rr != nil {
