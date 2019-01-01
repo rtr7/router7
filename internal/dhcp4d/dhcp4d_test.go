@@ -155,7 +155,7 @@ func TestPreferredAddress(t *testing.T) {
 		p := request(net.IPv4zero, hardwareAddr)
 		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
 		if got, want := resp.YIAddr().To4(), addr.To4(); bytes.Equal(got, want) {
-			t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
+			t.Errorf("DHCPOFFER for wrong IP: got %v, want anything else", got)
 		}
 	})
 
