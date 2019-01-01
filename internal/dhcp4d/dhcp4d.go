@@ -16,7 +16,6 @@
 package dhcp4d
 
 import (
-	"bytes"
 	"log"
 	"math/rand"
 	"net"
@@ -226,7 +225,7 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		hwAddr := p.CHAddr().String()
 
 		// try to offer the requested IP, if any and available
-		if !bytes.Equal(reqIP.To4(), net.IPv4zero) {
+		if !reqIP.To4().Equal(net.IPv4zero) {
 			free = h.canLease(reqIP, hwAddr)
 			//log.Printf("canLease(%v, %s) = %d", reqIP, hwAddr, free)
 		}
