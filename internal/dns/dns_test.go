@@ -16,8 +16,13 @@ package dns
 
 import (
 	"bytes"
+	"io/ioutil"
 	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -339,3 +344,97 @@ func TestDHCPReverse(t *testing.T) {
 }
 
 // TODO: multiple questions
+
+func TestSubname(t *testing.T) {
+	r := &recorder{}
+	s := NewServer("127.0.0.2:0", "lan")
+	s.SetLeases([]dhcp4d.Lease{
+		{
+			Hostname: "testtarget",
+			Addr:     net.IP{192, 168, 42, 23},
+		},
+	})
+
+	resolveTestTarget := func(t *testing.T, name string, want net.IP) {
+		m := new(dns.Msg)
+		typ := dns.TypeA
+		if want.To4() == nil {
+			typ = dns.TypeAAAA
+		}
+		m.SetQuestion(name, typ)
+		s.Mux.ServeDNS(r, m)
+		if r.response == nil {
+			t.Fatalf("nil response")
+		}
+		if got, want := len(r.response.Answer), 1; got != want {
+			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
+		}
+		a := r.response.Answer[0]
+		if typ == dns.TypeA {
+			if _, ok := a.(*dns.A); !ok {
+				t.Fatalf("unexpected response type: got %T, want dns.A", a)
+			}
+			if got := a.(*dns.A).A; !got.Equal(want) {
+				t.Fatalf("unexpected response IP: got %v, want %v", got, want)
+			}
+		} else {
+			if _, ok := a.(*dns.AAAA); !ok {
+				t.Fatalf("unexpected response type: got %T, want dns.A", a)
+			}
+			if got := a.(*dns.AAAA).AAAA; !got.Equal(want) {
+				t.Fatalf("unexpected response IP: got %v, want %v", got, want)
+			}
+		}
+	}
+
+	t.Run("testtarget.lan.", func(t *testing.T) {
+		resolveTestTarget(t, "testtarget.lan.", net.ParseIP("192.168.42.23"))
+	})
+
+	t.Run("sub.testtarget.lan.", func(t *testing.T) {
+		m := new(dns.Msg)
+		m.SetQuestion("notfound.lan.", dns.TypeA)
+		s.Mux.ServeDNS(r, m)
+		if got, want := r.response.Rcode, dns.RcodeNameError; got != want {
+			t.Fatalf("unexpected rcode: got %v, want %v", got, want)
+		}
+	})
+
+	setSubname := func(ip, remoteAddr string) {
+		val := url.Values{
+			"host": []string{"sub"},
+			"ip":   []string{ip},
+		}
+		req := httptest.NewRequest("POST", "/dyndns", strings.NewReader(val.Encode()))
+		req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+		req.RemoteAddr = remoteAddr
+		rec := httptest.NewRecorder()
+		s.DyndnsHandler(rec, req)
+		resp := rec.Result()
+		if got, want := resp.StatusCode, http.StatusOK; got != want {
+			body, _ := ioutil.ReadAll(resp.Body)
+			t.Fatalf("POST /dyndns: unexpected HTTP status: got %v, want %v (%q)", resp.Status, want, string(body))
+		}
+	}
+	const ip = "fdf5:3606:2a21:1341:b26e:bfff:fe30:504b"
+	setSubname(ip, "192.168.42.23:1234")
+
+	for _, name := range []string{
+		"sub.testtarget.lan.",
+		"sub.testtarget.",
+	} {
+		t.Run(name+" (after dyndns)", func(t *testing.T) {
+			resolveTestTarget(t, name, net.ParseIP(ip))
+		})
+	}
+
+	t.Run("Hostname", func(t *testing.T) {
+		hostname, err := os.Hostname()
+		if err != nil {
+			t.Skipf("os.Hostname: %v", err)
+		}
+		resolveTestTarget(t, hostname+".lan.", net.ParseIP("127.0.0.2"))
+		setSubname(ip, "127.0.0.2:1234")
+		resolveTestTarget(t, "sub."+hostname+".lan.", net.ParseIP(ip))
+	})
+}

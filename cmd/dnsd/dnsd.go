@@ -96,6 +96,7 @@ func logic() error {
 		log.Printf("cannot resolve DHCP hostnames: %v", err)
 	}
 	http.Handle("/metrics", srv.PrometheusHandler())
+	http.HandleFunc("/dyndns", srv.DyndnsHandler)
 	if err := updateListeners(srv.Mux); err != nil {
 		return err
 	}

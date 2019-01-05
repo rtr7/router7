@@ -17,6 +17,7 @@ package dns
 
 import (
 	"errors"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -51,6 +52,7 @@ type Server struct {
 	hostname, ip string
 	hostsByName  map[string]string
 	hostsByIP    map[string]string
+	subnames     map[string]map[string]net.IP // hostname → subname → ip
 }
 
 func NewServer(addr, domain string) *Server {
@@ -64,6 +66,7 @@ func NewServer(addr, domain string) *Server {
 		sometimes: rate.NewLimiter(rate.Every(1*time.Second), 1), // at most once per second
 		hostname:  hostname,
 		ip:        ip,
+		subnames:  make(map[string]map[string]net.IP),
 	}
 	server.prom.registry = prometheus.NewRegistry()
 
@@ -105,6 +108,8 @@ func (s *Server) initHostsLocked() {
 		if rev, err := dns.ReverseAddr(s.ip); err == nil {
 			s.hostsByIP[rev] = s.hostname
 		}
+		s.Mux.HandleFunc(s.hostname+".", s.subnameHandler(s.hostname))
+		s.Mux.HandleFunc(s.hostname+"."+s.domain+".", s.subnameHandler(s.hostname))
 	}
 }
 
@@ -122,8 +127,50 @@ func (s *Server) hostByIP(n string) (string, bool) {
 	return r, ok
 }
 
+func (s *Server) subname(hostname, host string) (net.IP, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	r, ok := s.subnames[hostname][host]
+	return r, ok
+}
+
 func (s *Server) PrometheusHandler() http.Handler {
 	return promhttp.HandlerFor(s.prom.registry, promhttp.HandlerOpts{})
+}
+
+func (s *Server) DyndnsHandler(w http.ResponseWriter, r *http.Request) {
+	host := r.FormValue("host")
+	ip := net.ParseIP(r.FormValue("ip"))
+	if ip == nil {
+		http.Error(w, "invalid ip", http.StatusBadRequest)
+		return
+	}
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	remote, _, err := net.SplitHostPort(r.RemoteAddr)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("net.SplitHostPort(%q): %v", r.RemoteAddr, err), http.StatusBadRequest)
+		return
+	}
+	rev, err := dns.ReverseAddr(remote)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("dns.ReverseAddr(%v): %v", remote, err), http.StatusBadRequest)
+		return
+	}
+	hostname, ok := s.hostsByIP[rev]
+	if !ok {
+		err := fmt.Sprintf("connection without corresponding DHCP lease: %v", rev)
+		http.Error(w, err, http.StatusForbidden)
+		return
+	}
+	subnames, ok := s.subnames[hostname]
+	if !ok {
+		subnames = make(map[string]net.IP)
+		s.subnames[hostname] = subnames
+	}
+	subnames[host] = ip
+	w.Write([]byte("ok\n"))
 }
 
 func (s *Server) SetLeases(leases []dhcp4d.Lease) {
@@ -135,6 +182,9 @@ func (s *Server) SetLeases(leases []dhcp4d.Lease) {
 		if l.Expired(now) {
 			continue
 		}
+		if l.Hostname == "" {
+			continue
+		}
 		if _, ok := s.hostsByName[l.Hostname]; ok {
 			continue // don’t overwrite e.g. the hostname entry
 		}
@@ -142,6 +192,8 @@ func (s *Server) SetLeases(leases []dhcp4d.Lease) {
 		if rev, err := dns.ReverseAddr(l.Addr.String()); err == nil {
 			s.hostsByIP[rev] = l.Hostname
 		}
+		s.Mux.HandleFunc(l.Hostname+".", s.subnameHandler(l.Hostname))
+		s.Mux.HandleFunc(l.Hostname+"."+s.domain+".", s.subnameHandler(l.Hostname))
 	}
 }
 
@@ -283,4 +335,67 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 		return // DNS has no reply for resolving errors
 	}
 	w.WriteMsg(in)
+}
+
+func (s *Server) resolveSubname(hostname string, q dns.Question) (dns.RR, error) {
+	if q.Qclass != dns.ClassINET {
+		return nil, nil
+	}
+	if q.Qtype == dns.TypeA ||
+		q.Qtype == dns.TypeAAAA ||
+		q.Qtype == dns.TypeMX {
+		name := strings.TrimSuffix(q.Name, "."+hostname+".")
+		name = strings.TrimSuffix(name, "."+hostname+"."+s.domain+".")
+
+		if q.Name == hostname+"." ||
+			q.Name == hostname+"."+s.domain+"." {
+			host, _ := s.hostByName(hostname)
+			if q.Qtype == dns.TypeA {
+				return dns.NewRR(q.Name + " 3600 IN A " + host)
+			}
+			return nil, sentinelEmpty
+		}
+
+		if ip, ok := s.subname(hostname, name); ok {
+			if q.Qtype == dns.TypeA && ip.To4() != nil {
+				return dns.NewRR(q.Name + " 3600 IN A " + ip.String())
+			}
+			if q.Qtype == dns.TypeAAAA && ip.To4() == nil {
+				return dns.NewRR(q.Name + " 3600 IN AAAA " + ip.String())
+			}
+			return nil, sentinelEmpty
+		}
+	}
+	return nil, nil
+}
+
+func (s *Server) subnameHandler(hostname string) func(w dns.ResponseWriter, r *dns.Msg) {
+	return func(w dns.ResponseWriter, r *dns.Msg) {
+		if len(r.Question) != 1 { // TODO: answer all questions we can answer
+			return
+		}
+
+		rr, err := s.resolveSubname(hostname, r.Question[0])
+		if err != nil {
+			if err == sentinelEmpty {
+				m := new(dns.Msg)
+				m.SetReply(r)
+				w.WriteMsg(m)
+				return
+			}
+			log.Fatal(err)
+		}
+		if rr != nil {
+			m := new(dns.Msg)
+			m.SetReply(r)
+			m.Answer = append(m.Answer, rr)
+			w.WriteMsg(m)
+			return
+		}
+		// Send an authoritative NXDOMAIN for local names:
+		m := new(dns.Msg)
+		m.SetReply(r)
+		m.SetRcode(r, dns.RcodeNameError)
+		w.WriteMsg(m)
+	}
 }
