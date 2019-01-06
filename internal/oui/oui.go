@@ -32,15 +32,26 @@ type DB struct {
 	orgs map[string]string
 }
 
+type option func(d *DB)
+
+func ouiURL(u string) option {
+	return func(d *DB) {
+		d.ouiURL = u
+	}
+}
+
 // NewDB loads a database from the cached version in dir, if any, and
 // asynchronously triggers an update. Use WaitUntilLoaded() to ensure Lookup()
 // will work, or use Lookup() opportunistically at any time.
-func NewDB(dir string) *DB {
+func NewDB(dir string, opts ...option) *DB {
 	db := &DB{
 		dir:    dir,
 		ouiURL: "http://standards-oui.ieee.org/oui/oui.csv",
 	}
 	db.cond = sync.NewCond(&db.Mutex)
+	for _, o := range opts {
+		o(db)
+	}
 	go db.update()
 	return db
 }

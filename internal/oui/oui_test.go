@@ -33,8 +33,7 @@ MA-L,4409B8,"Salcomp (Shenzhen) CO., LTD.","Salcomp Road, Furong Industrial Area
 		}))
 		defer srv.Close()
 
-		db := NewDB(tmpdir)
-		db.ouiURL = srv.URL
+		db := NewDB(tmpdir, ouiURL(srv.URL))
 		if err := db.WaitUntilLoaded(); err != nil {
 			t.Fatal(err)
 		}
@@ -56,8 +55,7 @@ MA-L,4409B8,"Salcomp (Shenzhen) CO., LTD.","Salcomp Road, Furong Industrial Area
 		}))
 		defer srv.Close()
 
-		db := NewDB(tmpdir)
-		db.ouiURL = srv.URL
+		db := NewDB(tmpdir, ouiURL(srv.URL))
 		if err := db.WaitUntilLoaded(); err != nil {
 			t.Fatal(err)
 		}
@@ -87,8 +85,7 @@ MA-L,4409B8,"Salcomp (Shenzhen) CO., LTD.","Salcomp Road, Furong Industrial Area
 		}))
 		defer srv.Close()
 
-		db := NewDB(tmpdir)
-		db.ouiURL = srv.URL
+		db := NewDB(tmpdir, ouiURL(srv.URL))
 		if err := db.WaitUntilLoaded(); err != nil {
 			t.Fatal(err)
 		}
@@ -121,8 +118,7 @@ MA-L,F09FC2,Obiquiti Networks Inc.,2580 Orchard Parkway San Jose CA US 95131
 		}))
 		defer srv.Close()
 
-		db := NewDB(tmpdir)
-		db.ouiURL = srv.URL
+		db := NewDB(tmpdir, ouiURL(srv.URL))
 		if err := db.WaitUntilLoaded(); err != nil {
 			t.Fatal(err)
 		}
