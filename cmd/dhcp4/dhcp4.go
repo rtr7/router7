@@ -30,6 +30,7 @@ import (
 
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/google/renameio"
 	"github.com/jpillora/backoff"
 	"github.com/rtr7/router7/internal/dhcp4"
 	"github.com/rtr7/router7/internal/notify"
@@ -83,7 +84,7 @@ func logic() error {
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(leasePath, b, 0644); err != nil {
+		if err := renameio.WriteFile(leasePath, b, 0644); err != nil {
 			return fmt.Errorf("persisting lease to %s: %v", leasePath, err)
 		}
 		buf := gopacket.NewSerializeBuffer()
@@ -94,7 +95,7 @@ func logic() error {
 			},
 			c.Ack,
 		)
-		if err := ioutil.WriteFile(ackFn, buf.Bytes(), 0644); err != nil {
+		if err := renameio.WriteFile(ackFn, buf.Bytes(), 0644); err != nil {
 			return fmt.Errorf("persisting DHCPACK to %s: %v", ackFn, err)
 		}
 		if err := notify.Process("/user/netconfigd", syscall.SIGUSR1); err != nil {

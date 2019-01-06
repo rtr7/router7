@@ -30,6 +30,7 @@ import (
 	"github.com/google/nftables"
 	"github.com/google/nftables/binaryutil"
 	"github.com/google/nftables/expr"
+	"github.com/google/renameio"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -287,7 +288,7 @@ func applyInterfaces(dir, root string) error {
 				if err := os.Remove(fn); err != nil && !os.IsNotExist(err) {
 					return err
 				}
-				if err := ioutil.WriteFile(fn, b, 0644); err != nil {
+				if err := renameio.WriteFile(fn, b, 0644); err != nil {
 					return err
 				}
 			}

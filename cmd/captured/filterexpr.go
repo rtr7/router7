@@ -21,11 +21,11 @@ import (
 	"fmt"
 	"go/format"
 	"io"
-	"io/ioutil"
 	"log"
 
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcap"
+	"github.com/google/renameio"
 )
 
 // udp and (port 67 or port 68)   # dhcpv4
@@ -57,7 +57,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := ioutil.WriteFile("GENERATED_filterexpr.go", gofmt, 0644); err != nil {
+	if err := renameio.WriteFile("GENERATED_filterexpr.go", gofmt, 0644); err != nil {
 		log.Fatal(err)
 	}
 }

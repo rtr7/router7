@@ -26,6 +26,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/google/renameio"
 	"github.com/rtr7/router7/internal/dhcp6"
 	"github.com/rtr7/router7/internal/notify"
 	"github.com/rtr7/router7/internal/teelogger"
@@ -34,8 +35,8 @@ import (
 var log = teelogger.NewConsole()
 
 func logic() error {
-	const configPath = "/perm/dhcp6/wire/lease.json"
-	if err := os.MkdirAll(filepath.Dir(configPath), 0755); err != nil {
+	const leasePath = "/perm/dhcp6/wire/lease.json"
+	if err := os.MkdirAll(filepath.Dir(leasePath), 0755); err != nil {
 		return err
 	}
 
@@ -64,7 +65,7 @@ func logic() error {
 		if err != nil {
 			return err
 		}
-		if err := ioutil.WriteFile(configPath, b, 0644); err != nil {
+		if err := renameio.WriteFile(leasePath, b, 0644); err != nil {
 			return err
 		}
 		if err := notify.Process("/user/netconfigd", syscall.SIGUSR1); err != nil {

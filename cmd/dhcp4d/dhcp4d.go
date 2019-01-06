@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/gokrazy/gokrazy"
+	"github.com/google/renameio"
 	"github.com/krolaw/dhcp4"
 	"github.com/krolaw/dhcp4/conn"
 	"github.com/prometheus/client_golang/prometheus"
@@ -125,8 +126,7 @@ func logic() error {
 			errs <- err
 			return
 		}
-		// TODO: write atomically
-		if err := ioutil.WriteFile("/perm/dhcp4d/leases.json", b, 0644); err != nil {
+		if err := renameio.WriteFile("/perm/dhcp4d/leases.json", b, 0644); err != nil {
 			errs <- err
 		}
 		updateNonExpired(leases)
