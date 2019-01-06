@@ -20,6 +20,7 @@ import (
 	"flag"
 	"io/ioutil"
 	"log"
+	"net"
 	"os"
 	"os/signal"
 	"syscall"
@@ -42,7 +43,15 @@ func logic() error {
 		if err := json.Unmarshal(b, &cfg); err != nil {
 			return err
 		}
-		srv.SetPrefixes(cfg.Prefixes)
+
+		var additional []net.IPNet
+		if b, err := ioutil.ReadFile("/perm/radvd/prefixes.json"); err == nil {
+			if err := json.Unmarshal(b, &additional); err != nil {
+				return err
+			}
+		}
+
+		srv.SetPrefixes(append(cfg.Prefixes, additional...))
 		return nil
 	}
 	if err := readConfig(); err != nil {
