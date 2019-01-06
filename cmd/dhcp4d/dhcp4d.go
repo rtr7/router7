@@ -18,6 +18,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -37,6 +38,7 @@ import (
 	"github.com/rtr7/router7/internal/dhcp4d"
 	"github.com/rtr7/router7/internal/multilisten"
 	"github.com/rtr7/router7/internal/notify"
+	"github.com/rtr7/router7/internal/oui"
 	"github.com/rtr7/router7/internal/teelogger"
 )
 
@@ -59,6 +61,8 @@ func updateNonExpired(leases []*dhcp4d.Lease) {
 	nonExpiredLeases.Set(float64(nonExpired))
 }
 
+var ouiDB = oui.NewDB("/perm/dhcp4d/oui")
+
 func loadLeases(h *dhcp4d.Handler, fn string) error {
 	b, err := ioutil.ReadFile(fn)
 	if err != nil {
@@ -73,6 +77,14 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 	}
 	h.SetLeases(leases)
 	updateNonExpired(leases)
+
+	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// TODO: html template
+		for _, l := range leases {
+			fmt.Fprintf(w, "• %+v (vendor %v)\n", l, ouiDB.Lookup(l.HardwareAddr[:8]))
+		}
+	})
+
 	return nil
 }
 
