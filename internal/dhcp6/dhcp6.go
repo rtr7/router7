@@ -45,8 +45,8 @@ type ClientConfig struct {
 	// be able to carry it around between devices.
 	DUID []byte
 
-	Conn           net.PacketConn // for testing
-	TransactionIDs []uint32       // for testing
+	Conn           net.PacketConn         // for testing
+	TransactionIDs []dhcpv6.TransactionID // for testing
 }
 
 // Config contains the obtained network configuration.
@@ -67,7 +67,7 @@ type Client struct {
 	err error
 
 	Conn           net.PacketConn // TODO: unexport
-	transactionIDs []uint32
+	transactionIDs []dhcpv6.TransactionID
 
 	ReadTimeout  time.Duration
 	WriteTimeout time.Duration
@@ -124,7 +124,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 		duid = &dhcpv6.Duid{
 			Type:          dhcpv6.DUID_LLT,
-			HwType:        iana.HwTypeEthernet,
+			HwType:        iana.HWTypeEthernet,
 			Time:          dhcpv6.GetTime(),
 			LinkLayerAddr: iface.HardwareAddr,
 		}
@@ -283,7 +283,7 @@ func (c *Client) ObtainOrRenew() bool {
 	for _, opt := range reply.Options() {
 		switch o := opt.(type) {
 		case *dhcpv6.OptIAForPrefixDelegation:
-			t1 := c.timeNow().Add(time.Duration(o.T1()) * time.Second)
+			t1 := c.timeNow().Add(time.Duration(o.T1) * time.Second)
 			if t1.Before(newCfg.RenewAfter) || newCfg.RenewAfter.IsZero() {
 				newCfg.RenewAfter = t1
 			}

@@ -25,6 +25,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/google/gopacket/pcapgo"
+	"github.com/insomniacslk/dhcp/dhcpv6"
 )
 
 type packet struct {
@@ -86,9 +87,9 @@ func TestDHCP6(t *testing.T) {
 		InterfaceName: "lo",
 		LocalAddr:     laddr,
 		Conn:          &replayer{pcapr: pcapr},
-		TransactionIDs: []uint32{
-			0x48e59e, // SOLICIT
-			0x738c3b, // REQUEST
+		TransactionIDs: []dhcpv6.TransactionID{
+			dhcpv6.TransactionID{0x48, 0xe5, 0x9e}, // SOLICIT
+			dhcpv6.TransactionID{0x73, 0x8c, 0x3b}, // REQUEST
 		},
 	})
 	if err != nil {
