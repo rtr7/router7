@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/google/go-cmp/cmp"
+	"github.com/insomniacslk/dhcp/dhcpv6"
 	"github.com/rtr7/router7/internal/testing/pcapreplayer"
 )
 
@@ -46,9 +47,9 @@ func TestDHCP6(t *testing.T) {
 		InterfaceName: "lo",
 		LocalAddr:     laddr,
 		Conn:          conn,
-		TransactionIDs: []uint32{
-			0x48e59e, // SOLICIT
-			0x738c3b, // REQUEST
+		TransactionIDs: []dhcpv6.TransactionID{
+			{0x48, 0xe5, 0x9e}, // SOLICIT
+			{0x73, 0x8c, 0x3b}, // REQUEST
 		},
 	})
 	if err != nil {
