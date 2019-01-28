@@ -23,6 +23,7 @@ import (
 	"time"
 
 	"github.com/insomniacslk/dhcp/dhcpv6"
+	"github.com/insomniacslk/dhcp/dhcpv6/client6"
 	"github.com/insomniacslk/dhcp/iana"
 )
 
@@ -103,7 +104,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	raddr := cfg.RemoteAddr
 	if raddr == nil {
 		raddr = &net.UDPAddr{
-			IP:   dhcpv6.AllDHCPRelayAgentsAndServers,
+			IP:   client6.AllDHCPRelayAgentsAndServers,
 			Port: dhcpv6.DefaultServerPort,
 		}
 	}
@@ -147,8 +148,8 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		Conn:           conn,
 		duid:           duid,
 		transactionIDs: cfg.TransactionIDs,
-		ReadTimeout:    dhcpv6.DefaultReadTimeout,
-		WriteTimeout:   dhcpv6.DefaultWriteTimeout,
+		ReadTimeout:    client6.DefaultReadTimeout,
+		WriteTimeout:   client6.DefaultWriteTimeout,
 	}, nil
 }
 
