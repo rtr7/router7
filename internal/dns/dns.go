@@ -39,7 +39,7 @@ type Server struct {
 
 	client    *dns.Client
 	domain    string
-	upstream  string
+	upstream  []string
 	sometimes *rate.Limiter
 	prom      struct {
 		registry  *prometheus.Registry
@@ -59,10 +59,16 @@ func NewServer(addr, domain string) *Server {
 	hostname, _ := os.Hostname()
 	ip, _, _ := net.SplitHostPort(addr)
 	server := &Server{
-		Mux:       dns.NewServeMux(),
-		client:    &dns.Client{},
-		domain:    domain,
-		upstream:  "8.8.8.8:53",
+		Mux:    dns.NewServeMux(),
+		client: &dns.Client{},
+		domain: domain,
+		upstream: []string{
+			// https://developers.google.com/speed/public-dns/docs/using#google_public_dns_ip_addresses
+			"8.8.8.8:53",
+			"8.8.4.4:53",
+			"[2001:4860:4860::8888]:53",
+			"[2001:4860:4860::8844]:53",
+		},
 		sometimes: rate.NewLimiter(rate.Every(1*time.Second), 1), // at most once per second
 		hostname:  hostname,
 		ip:        ip,
@@ -327,14 +333,18 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 	s.prom.questions.Observe(float64(len(r.Question)))
 	s.prom.upstream.WithLabelValues("DNS").Inc()
 
-	in, _, err := s.client.Exchange(r, s.upstream)
-	if err != nil {
-		if s.sometimes.Allow() {
-			log.Printf("resolving %v failed: %v", r.Question, err)
+	for _, u := range s.upstream {
+		in, _, err := s.client.Exchange(r, u)
+		if err != nil {
+			if s.sometimes.Allow() {
+				log.Printf("resolving %v failed: %v", r.Question, err)
+			}
+			continue // fall back to next-slower upstream
 		}
-		return // DNS has no reply for resolving errors
+		w.WriteMsg(in)
+		break
 	}
-	w.WriteMsg(in)
+	// DNS has no reply for resolving errors
 }
 
 func (s *Server) resolveSubname(hostname string, q dns.Question) (dns.RR, error) {

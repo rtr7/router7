@@ -16,6 +16,7 @@ package dns
 
 import (
 	"bytes"
+	"fmt"
 	"io/ioutil"
 	"net"
 	"net/http"
@@ -63,12 +64,37 @@ func TestNXDOMAIN(t *testing.T) {
 func TestResolveError(t *testing.T) {
 	r := &recorder{}
 	s := NewServer("localhost:0", "lan")
-	s.upstream = "266.266.266.266:53"
+	s.upstream = []string{"266.266.266.266:53"}
 	m := new(dns.Msg)
 	m.SetQuestion("foo.invalid.", dns.TypeA)
 	s.Mux.ServeDNS(r, m)
 	if r.response != nil {
 		t.Fatalf("r.response unexpectedly not nil: %v", r.response)
+	}
+}
+
+func TestResolveFallback(t *testing.T) {
+	s := NewServer("localhost:0", "lan")
+	s.upstream = []string{
+		"266.266.266.266:53",
+	}
+	{
+		pc, err := net.ListenPacket("udp", "localhost:0")
+		if err != nil {
+			t.Fatal(err)
+		}
+		go dns.ActivateAndServe(nil, pc, dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+			rr, _ := dns.NewRR(r.Question[0].Name + " 3600 IN A 127.0.0.1")
+			m := new(dns.Msg)
+			m.SetReply(r)
+			m.Answer = append(m.Answer, rr)
+			w.WriteMsg(m)
+		}))
+		s.upstream = append(s.upstream, pc.LocalAddr().String())
+	}
+
+	if err := resolveTestTarget(s, "google.ch.", net.ParseIP("127.0.0.1")); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -343,6 +369,40 @@ func TestDHCPReverse(t *testing.T) {
 
 }
 
+func resolveTestTarget(s *Server, name string, want net.IP) error {
+	m := new(dns.Msg)
+	typ := dns.TypeA
+	if want.To4() == nil {
+		typ = dns.TypeAAAA
+	}
+	m.SetQuestion(name, typ)
+	r := &recorder{}
+	s.Mux.ServeDNS(r, m)
+	if r.response == nil {
+		return fmt.Errorf("nil response")
+	}
+	if got, want := len(r.response.Answer), 1; got != want {
+		return fmt.Errorf("unexpected number of answers: got %d, want %d", got, want)
+	}
+	a := r.response.Answer[0]
+	if typ == dns.TypeA {
+		if _, ok := a.(*dns.A); !ok {
+			return fmt.Errorf("unexpected response type: got %T, want dns.A", a)
+		}
+		if got := a.(*dns.A).A; !got.Equal(want) {
+			return fmt.Errorf("unexpected response IP: got %v, want %v", got, want)
+		}
+	} else {
+		if _, ok := a.(*dns.AAAA); !ok {
+			return fmt.Errorf("unexpected response type: got %T, want dns.A", a)
+		}
+		if got := a.(*dns.AAAA).AAAA; !got.Equal(want) {
+			return fmt.Errorf("unexpected response IP: got %v, want %v", got, want)
+		}
+	}
+	return nil
+}
+
 // TODO: multiple questions
 
 func TestSubname(t *testing.T) {
@@ -355,40 +415,10 @@ func TestSubname(t *testing.T) {
 		},
 	})
 
-	resolveTestTarget := func(t *testing.T, name string, want net.IP) {
-		m := new(dns.Msg)
-		typ := dns.TypeA
-		if want.To4() == nil {
-			typ = dns.TypeAAAA
-		}
-		m.SetQuestion(name, typ)
-		s.Mux.ServeDNS(r, m)
-		if r.response == nil {
-			t.Fatalf("nil response")
-		}
-		if got, want := len(r.response.Answer), 1; got != want {
-			t.Fatalf("unexpected number of answers: got %d, want %d", got, want)
-		}
-		a := r.response.Answer[0]
-		if typ == dns.TypeA {
-			if _, ok := a.(*dns.A); !ok {
-				t.Fatalf("unexpected response type: got %T, want dns.A", a)
-			}
-			if got := a.(*dns.A).A; !got.Equal(want) {
-				t.Fatalf("unexpected response IP: got %v, want %v", got, want)
-			}
-		} else {
-			if _, ok := a.(*dns.AAAA); !ok {
-				t.Fatalf("unexpected response type: got %T, want dns.A", a)
-			}
-			if got := a.(*dns.AAAA).AAAA; !got.Equal(want) {
-				t.Fatalf("unexpected response IP: got %v, want %v", got, want)
-			}
-		}
-	}
-
 	t.Run("testtarget.lan.", func(t *testing.T) {
-		resolveTestTarget(t, "testtarget.lan.", net.ParseIP("192.168.42.23"))
+		if err := resolveTestTarget(s, "testtarget.lan.", net.ParseIP("192.168.42.23")); err != nil {
+			t.Fatal(err)
+		}
 	})
 
 	t.Run("sub.testtarget.lan.", func(t *testing.T) {
@@ -424,7 +454,9 @@ func TestSubname(t *testing.T) {
 		"sub.testtarget.",
 	} {
 		t.Run(name+" (after dyndns)", func(t *testing.T) {
-			resolveTestTarget(t, name, net.ParseIP(ip))
+			if err := resolveTestTarget(s, name, net.ParseIP(ip)); err != nil {
+				t.Fatal(err)
+			}
 		})
 	}
 
@@ -433,8 +465,12 @@ func TestSubname(t *testing.T) {
 		if err != nil {
 			t.Skipf("os.Hostname: %v", err)
 		}
-		resolveTestTarget(t, hostname+".lan.", net.ParseIP("127.0.0.2"))
+		if err := resolveTestTarget(s, hostname+".lan.", net.ParseIP("127.0.0.2")); err != nil {
+			t.Fatal(err)
+		}
 		setSubname(ip, "127.0.0.2:1234")
-		resolveTestTarget(t, "sub."+hostname+".lan.", net.ParseIP(ip))
+		if err := resolveTestTarget(s, "sub."+hostname+".lan.", net.ParseIP(ip)); err != nil {
+			t.Fatal(err)
+		}
 	})
 }
