@@ -40,6 +40,7 @@ type Config struct {
 
 type Client struct {
 	Interface *net.Interface // e.g. net.InterfaceByName("eth0")
+	HWAddr    net.HardwareAddr
 
 	err          error
 	once         sync.Once
@@ -101,6 +102,9 @@ func (c *Client) ObtainOrRenew() bool {
 		if c.connection == nil && c.Interface == nil {
 			onceErr = fmt.Errorf("Interface is nil")
 			return
+		}
+		if c.hardwareAddr == nil && c.HWAddr != nil {
+			c.hardwareAddr = c.HWAddr
 		}
 		if c.hardwareAddr == nil {
 			c.hardwareAddr = c.Interface.HardwareAddr

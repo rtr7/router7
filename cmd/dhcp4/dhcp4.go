@@ -33,6 +33,7 @@ import (
 	"github.com/google/renameio"
 	"github.com/jpillora/backoff"
 	"github.com/rtr7/router7/internal/dhcp4"
+	"github.com/rtr7/router7/internal/netconfig"
 	"github.com/rtr7/router7/internal/notify"
 	"github.com/rtr7/router7/internal/teelogger"
 )
@@ -48,6 +49,20 @@ func logic() error {
 	if err != nil {
 		return err
 	}
+	hwaddr := iface.HardwareAddr
+	// The interface may not have been configured by netconfigd yet and might
+	// still use the old hardware address. We overwrite it with the address that
+	// netconfigd is going to use to fix this issue without additional
+	// synchronization.
+	details, err := netconfig.Interface("/perm", "uplink0")
+	if err != nil {
+		return err
+	}
+	if spoof := details.SpoofHardwareAddr; spoof != "" {
+		if addr, err := net.ParseMAC(spoof); err == nil {
+			hwaddr = addr
+		}
+	}
 	const ackFn = "/perm/dhcp4/wire/ack"
 	var ack *layers.DHCPv4
 	ackB, err := ioutil.ReadFile(ackFn)
@@ -61,6 +76,7 @@ func logic() error {
 	}
 	c := dhcp4.Client{
 		Interface: iface,
+		HWAddr:    hwaddr,
 		Ack:       ack,
 	}
 	usr2 := make(chan os.Signal, 1)

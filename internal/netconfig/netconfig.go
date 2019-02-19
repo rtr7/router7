@@ -184,26 +184,36 @@ type InterfaceConfig struct {
 	Interfaces []InterfaceDetails `json:"interfaces"`
 }
 
-// LinkAddress returns the IP address configured for the interface ifname in
+// Interface returns the InterfaceDetails configured for interface ifname in
 // interfaces.json.
-func LinkAddress(dir, ifname string) (net.IP, error) {
+func Interface(dir, ifname string) (InterfaceDetails, error) {
 	fn := filepath.Join(dir, "interfaces.json")
 	b, err := ioutil.ReadFile(fn)
 	if err != nil {
-		return nil, err
+		return InterfaceDetails{}, err
 	}
 	var cfg InterfaceConfig
 	if err := json.Unmarshal(b, &cfg); err != nil {
-		return nil, err
+		return InterfaceDetails{}, err
 	}
 	for _, details := range cfg.Interfaces {
 		if details.Name != ifname {
 			continue
 		}
-		ip, _, err := net.ParseCIDR(details.Addr)
-		return ip, err
+		return details, nil
 	}
-	return nil, fmt.Errorf("%s does not configure interface %q", fn, ifname)
+	return InterfaceDetails{}, fmt.Errorf("%s does not configure interface %q", fn, ifname)
+}
+
+// LinkAddress returns the IP address configured for the interface ifname in
+// interfaces.json.
+func LinkAddress(dir, ifname string) (net.IP, error) {
+	iface, err := Interface(dir, ifname)
+	if err != nil {
+		return nil, err
+	}
+	ip, _, err := net.ParseCIDR(iface.Addr)
+	return ip, err
 }
 
 func applyInterfaces(dir, root string) error {
