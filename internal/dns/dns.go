@@ -18,21 +18,25 @@ package dns
 import (
 	"errors"
 	"fmt"
-	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/rtr7/router7/internal/dhcp4d"
+	"github.com/rtr7/router7/internal/teelogger"
 
 	"github.com/miekg/dns"
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"golang.org/x/time/rate"
 )
+
+var log = teelogger.NewConsole()
 
 type Server struct {
 	Mux *dns.ServeMux
@@ -105,6 +109,11 @@ func NewServer(addr, domain string) *Server {
 	server.Mux.HandleFunc(".", server.handleRequest)
 	server.Mux.HandleFunc("lan.", server.handleInternal)
 	server.Mux.HandleFunc("localhost.", server.handleInternal)
+	go func() {
+		for range time.Tick(10 * time.Second) {
+			server.probeUpstreamLatency()
+		}
+	}()
 	return server
 }
 
@@ -119,6 +128,52 @@ func (s *Server) initHostsLocked() {
 		s.Mux.HandleFunc(s.hostname+".", s.subnameHandler(s.hostname))
 		s.Mux.HandleFunc(s.hostname+"."+s.domain+".", s.subnameHandler(s.hostname))
 	}
+}
+
+type measurement struct {
+	upstream string
+	rtt      time.Duration
+}
+
+func (m measurement) String() string {
+	return fmt.Sprintf("{upstream: %s, rtt: %v}", m.upstream, m.rtt)
+}
+
+func (s *Server) probeUpstreamLatency() {
+	upstreams := s.upstreams()
+	results := make([]measurement, len(upstreams))
+	var wg sync.WaitGroup
+	for idx, u := range upstreams {
+		wg.Add(1)
+		go func(idx int, u string) {
+			defer wg.Done()
+			// resolve a most-definitely cached record
+			m := new(dns.Msg)
+			m.SetQuestion("google.ch.", dns.TypeA)
+			start := time.Now()
+			_, _, err := s.client.Exchange(m, u)
+			rtt := time.Since(start)
+			if err != nil {
+				// including unresponsive upstreams in results makes the update
+				// code simpler:
+				results[idx] = measurement{u, time.Duration(math.MaxInt64)}
+				return
+			}
+			results[idx] = measurement{u, rtt}
+		}(idx, u)
+	}
+	wg.Wait()
+	// Re-order by resolving latency:
+	sort.Slice(results, func(i, j int) bool {
+		return results[i].rtt < results[j].rtt
+	})
+	log.Printf("probe results: %v", results)
+	for idx, result := range results {
+		upstreams[idx] = result.upstream
+	}
+	s.upstreamMu.Lock()
+	defer s.upstreamMu.Unlock()
+	s.upstream = upstreams
 }
 
 func (s *Server) hostByName(n string) (string, bool) {
