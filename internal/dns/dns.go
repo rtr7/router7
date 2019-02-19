@@ -39,7 +39,6 @@ type Server struct {
 
 	client    *dns.Client
 	domain    string
-	upstream  []string
 	sometimes *rate.Limiter
 	prom      struct {
 		registry  *prometheus.Registry
@@ -53,6 +52,9 @@ type Server struct {
 	hostsByName  map[string]string
 	hostsByIP    map[string]string
 	subnames     map[string]map[string]net.IP // hostname → subname → ip
+
+	upstreamMu sync.RWMutex
+	upstream   []string
 }
 
 func NewServer(addr, domain string) *Server {
@@ -320,6 +322,14 @@ func (s *Server) handleInternal(w dns.ResponseWriter, r *dns.Msg) {
 	w.WriteMsg(m)
 }
 
+func (s *Server) upstreams() []string {
+	s.upstreamMu.RLock()
+	defer s.upstreamMu.RUnlock()
+	result := make([]string, len(s.upstream))
+	copy(result, s.upstream)
+	return result
+}
+
 func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 	if len(r.Question) == 1 { // TODO: answer all questions we can answer
 		q := r.Question[0]
@@ -333,7 +343,7 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 	s.prom.questions.Observe(float64(len(r.Question)))
 	s.prom.upstream.WithLabelValues("DNS").Inc()
 
-	for _, u := range s.upstream {
+	for idx, u := range s.upstreams() {
 		in, _, err := s.client.Exchange(r, u)
 		if err != nil {
 			if s.sometimes.Allow() {
@@ -342,7 +352,13 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 			continue // fall back to next-slower upstream
 		}
 		w.WriteMsg(in)
-		break
+		if idx > 0 {
+			// re-order this upstream to the front of s.upstream.
+			s.upstreamMu.Lock()
+			s.upstream = append(append([]string{u}, s.upstream[:idx]...), s.upstream[idx+1:]...)
+			s.upstreamMu.Unlock()
+		}
+		return
 	}
 	// DNS has no reply for resolving errors
 }

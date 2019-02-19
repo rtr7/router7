@@ -24,6 +24,7 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -77,24 +78,55 @@ func TestResolveFallback(t *testing.T) {
 	s := NewServer("localhost:0", "lan")
 	s.upstream = []string{
 		"266.266.266.266:53",
-	}
-	{
-		pc, err := net.ListenPacket("udp", "localhost:0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		go dns.ActivateAndServe(nil, pc, dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+		dnsServerAddr(t, dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
 			rr, _ := dns.NewRR(r.Question[0].Name + " 3600 IN A 127.0.0.1")
 			m := new(dns.Msg)
 			m.SetReply(r)
 			m.Answer = append(m.Answer, rr)
 			w.WriteMsg(m)
-		}))
-		s.upstream = append(s.upstream, pc.LocalAddr().String())
+		})),
 	}
-
 	if err := resolveTestTarget(s, "google.ch.", net.ParseIP("127.0.0.1")); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func dnsServerAddr(t *testing.T, h dns.Handler) string {
+	t.Helper()
+
+	pc, err := net.ListenPacket("udp", "localhost:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	go dns.ActivateAndServe(nil, pc, h)
+	return pc.LocalAddr().String()
+}
+
+func TestResolveFallbackOnce(t *testing.T) {
+	s := NewServer("localhost:0", "lan")
+	var slowHits uint32
+	s.upstream = []string{
+		dnsServerAddr(t, dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+			atomic.AddUint32(&slowHits, 1)
+			// trigger fallback by sending no reply
+		})),
+		dnsServerAddr(t, dns.HandlerFunc(func(w dns.ResponseWriter, r *dns.Msg) {
+			rr, _ := dns.NewRR(r.Question[0].Name + " 3600 IN A 127.0.0.1")
+			m := new(dns.Msg)
+			m.SetReply(r)
+			m.Answer = append(m.Answer, rr)
+			w.WriteMsg(m)
+		})),
+		"266.266.266.266:53",
+	}
+
+	for i := 0; i < 2; i++ {
+		if err := resolveTestTarget(s, "google.ch.", net.ParseIP("127.0.0.1")); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if got, want := atomic.LoadUint32(&slowHits), uint32(1); got != want {
+		t.Errorf("slow upstream server hits = %d, wanted %d", got, want)
 	}
 }
 
