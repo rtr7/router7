@@ -79,6 +79,19 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 	updateNonExpired(leases)
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		host, _, err := net.SplitHostPort(r.RemoteAddr)
+		if err != nil {
+			http.Error(w, "bad request", http.StatusBadRequest)
+			return
+		}
+		ip := net.ParseIP(host)
+		if xff := r.Header.Get("X-Forwarded-For"); ip.IsLoopback() && xff != "" {
+			ip = net.ParseIP(xff)
+		}
+		if !gokrazy.IsInPrivateNet(ip) {
+			http.Error(w, fmt.Sprintf("access from %v forbidden", ip), http.StatusForbidden)
+			return
+		}
 		// TODO: html template
 		for _, l := range leases {
 			fmt.Fprintf(w, "• %+v (vendor %v)\n", l, ouiDB.Lookup(l.HardwareAddr[:8]))
