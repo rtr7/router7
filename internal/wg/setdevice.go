@@ -143,7 +143,7 @@ func SetDevice(conn *genetlink.Conn, d *Device) error {
 		Data: data,
 	}
 
-	const flags = netlink.HeaderFlagsRequest | netlink.HeaderFlagsAcknowledge
+	const flags = netlink.Request | netlink.Acknowledge
 	reply, err := conn.Execute(get, family.ID, flags)
 	if err != nil {
 		return err
