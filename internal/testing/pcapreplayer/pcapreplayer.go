@@ -130,7 +130,7 @@ type packetConn struct {
 	pcapw *pcapgo.Writer
 }
 
-// NewPCAP returns a net.PacketConn which replays packets from pcap file input,
+// NewPacketConn returns a net.PacketConn which replays packets from pcap file input,
 // writing packets to pcap file output (if non-empty).
 //
 // See https://en.wikipedia.org/wiki/Pcap for details on pcap.
