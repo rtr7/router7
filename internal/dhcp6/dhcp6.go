@@ -217,7 +217,11 @@ func (c *Client) sendReceive(packet *dhcpv6.Message, expectedType dhcpv6.Message
 func (c *Client) solicit(solicit *dhcpv6.Message) (*dhcpv6.Message, *dhcpv6.Message, error) {
 	var err error
 	if solicit == nil {
-		solicit, err = dhcpv6.NewSolicitForInterface(c.interfaceName, dhcpv6.WithClientID(*c.duid))
+		iface, err := net.InterfaceByName(c.interfaceName)
+		if err != nil {
+			return nil, nil, err
+		}
+		solicit, err = dhcpv6.NewSolicit(iface.HardwareAddr, dhcpv6.WithClientID(*c.duid))
 		if err != nil {
 			return nil, nil, err
 		}
