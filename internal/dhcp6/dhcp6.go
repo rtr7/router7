@@ -59,6 +59,7 @@ type Config struct {
 
 type Client struct {
 	interfaceName string
+	hardwareAddr  net.HardwareAddr
 	raddr         *net.UDPAddr
 	timeNow       func() time.Time
 	duid          *dhcpv6.Duid
@@ -118,11 +119,6 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		}
 		fmt.Printf("duid: %T, %v, %#v", duid, duid, duid)
 	} else {
-		iface, err := net.InterfaceByName(cfg.InterfaceName)
-		if err != nil {
-			return nil, err
-		}
-
 		duid = &dhcpv6.Duid{
 			Type:          dhcpv6.DUID_LLT,
 			HwType:        iana.HWTypeEthernet,
@@ -143,6 +139,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 
 	return &Client{
 		interfaceName:  cfg.InterfaceName,
+		hardwareAddr:   iface.HardwareAddr,
 		timeNow:        time.Now,
 		raddr:          raddr,
 		Conn:           conn,
@@ -217,11 +214,7 @@ func (c *Client) sendReceive(packet *dhcpv6.Message, expectedType dhcpv6.Message
 func (c *Client) solicit(solicit *dhcpv6.Message) (*dhcpv6.Message, *dhcpv6.Message, error) {
 	var err error
 	if solicit == nil {
-		iface, err := net.InterfaceByName(c.interfaceName)
-		if err != nil {
-			return nil, nil, err
-		}
-		solicit, err = dhcpv6.NewSolicit(iface.HardwareAddr, dhcpv6.WithClientID(*c.duid))
+		solicit, err = dhcpv6.NewSolicit(c.hardwareAddr, dhcpv6.WithClientID(*c.duid))
 		if err != nil {
 			return nil, nil, err
 		}
