@@ -18,7 +18,7 @@ script:
   # Check whether files were not gofmt'ed.
   - "gosrc=$(find . -name '*.go' | tr '\\n' ' '); [ $(gofmt -l $gosrc 2>&- | wc -l) -eq 0 ] || (echo 'gofmt was not run on these files:'; gofmt -l $gosrc 2>&-; false)"
   # TODO: remove the || true suffix once vet errors are fixed
-  - go tool vet . || true
+  - go vet . || true
   - sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0
   - sudo ip -6 address replace ::1/128 dev lo
   - go build ./cmd/...
