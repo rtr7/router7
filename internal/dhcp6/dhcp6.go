@@ -105,7 +105,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 	raddr := cfg.RemoteAddr
 	if raddr == nil {
 		raddr = &net.UDPAddr{
-			IP:   client6.AllDHCPRelayAgentsAndServers,
+			IP:   dhcpv6.AllDHCPRelayAgentsAndServers,
 			Port: dhcpv6.DefaultServerPort,
 		}
 	}
