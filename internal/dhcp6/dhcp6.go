@@ -48,6 +48,11 @@ type ClientConfig struct {
 
 	Conn           net.PacketConn         // for testing
 	TransactionIDs []dhcpv6.TransactionID // for testing
+
+	// HardwareAddr allows overriding the hardware address in tests. If nil,
+	// defaults to the hardware address of the interface identified by
+	// InterfaceName.
+	HardwareAddr net.HardwareAddr
 }
 
 // Config contains the obtained network configuration.
@@ -110,6 +115,11 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		}
 	}
 
+	hardwareAddr := iface.HardwareAddr
+	if cfg.HardwareAddr != nil {
+		hardwareAddr = cfg.HardwareAddr
+	}
+
 	var duid *dhcpv6.Duid
 	if cfg.DUID != nil {
 		var err error
@@ -123,7 +133,7 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 			Type:          dhcpv6.DUID_LLT,
 			HwType:        iana.HWTypeEthernet,
 			Time:          dhcpv6.GetTime(),
-			LinkLayerAddr: iface.HardwareAddr,
+			LinkLayerAddr: hardwareAddr,
 		}
 	}
 
@@ -137,11 +147,9 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		conn = udpConn
 	}
 
-	log.Printf("cfg.hardwareAddr = %#v", iface.hardwareAddr)
-
 	return &Client{
 		interfaceName:  cfg.InterfaceName,
-		hardwareAddr:   iface.HardwareAddr,
+		hardwareAddr:   hardwareAddr,
 		timeNow:        time.Now,
 		raddr:          raddr,
 		Conn:           conn,
