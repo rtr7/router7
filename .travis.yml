@@ -20,9 +20,6 @@ script:
   # TODO: remove the || true suffix once vet errors are fixed
   - go vet . || true
   - sudo sysctl -w net.ipv6.conf.all.disable_ipv6=0
-  - sudo ip -6 address replace ::1/128 dev lo
-  - sudo ip link
-  - sudo ip addr
   - go build ./cmd/...
   - go test -v -race ./internal/...
   - docker build --pull --no-cache --rm -t=router7 -f travis/Dockerfile .
