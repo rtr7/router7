@@ -137,6 +137,8 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		conn = udpConn
 	}
 
+	log.Printf("cfg.hardwareAddr = %#v", iface.hardwareAddr)
+
 	return &Client{
 		interfaceName:  cfg.InterfaceName,
 		hardwareAddr:   iface.HardwareAddr,
