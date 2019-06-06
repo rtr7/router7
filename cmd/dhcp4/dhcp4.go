@@ -40,12 +40,17 @@ import (
 
 var log = teelogger.NewConsole()
 
+var (
+	netInterface = flag.String("interface", "uplink0", "network interface to operate on")
+	stateDir     = flag.String("state_dir", "/perm/dhcp4", "directory in which to store lease data (wire/lease.json) and last ACK (wire/ack)")
+)
+
 func logic() error {
-	const leasePath = "/perm/dhcp4/wire/lease.json"
+	leasePath := filepath.Join(*stateDir, "wire/lease.json")
 	if err := os.MkdirAll(filepath.Dir(leasePath), 0755); err != nil {
 		return err
 	}
-	iface, err := net.InterfaceByName("uplink0")
+	iface, err := net.InterfaceByName(*netInterface)
 	if err != nil {
 		return err
 	}
@@ -54,16 +59,15 @@ func logic() error {
 	// still use the old hardware address. We overwrite it with the address that
 	// netconfigd is going to use to fix this issue without additional
 	// synchronization.
-	details, err := netconfig.Interface("/perm", "uplink0")
-	if err != nil {
-		return err
-	}
-	if spoof := details.SpoofHardwareAddr; spoof != "" {
-		if addr, err := net.ParseMAC(spoof); err == nil {
-			hwaddr = addr
+	details, err := netconfig.Interface("/perm", *netInterface)
+	if err == nil {
+		if spoof := details.SpoofHardwareAddr; spoof != "" {
+			if addr, err := net.ParseMAC(spoof); err == nil {
+				hwaddr = addr
+			}
 		}
 	}
-	const ackFn = "/perm/dhcp4/wire/ack"
+	ackFn := filepath.Join(*stateDir, "wire/ack")
 	var ack *layers.DHCPv4
 	ackB, err := ioutil.ReadFile(ackFn)
 	if err != nil && !os.IsNotExist(err) {
