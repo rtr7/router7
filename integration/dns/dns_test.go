@@ -37,7 +37,7 @@ func TestDNS(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got, want := strings.TrimSpace(string(out)), "google-public-dns-a.google.com."; got != want {
+	if got, want := strings.TrimSpace(string(out)), "dns.google."; got != want {
 		t.Fatalf("dig -x 8.8.8.8: unexpected reply: got %q, want %q", got, want)
 	}
 }
