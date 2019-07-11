@@ -142,9 +142,9 @@ func goldenNftablesRules(additionalForwarding bool) string {
 	return `table ip nat {
 	chain prerouting {
 		type nat hook prerouting priority 0; policy accept;
-		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999` + add + `
+		iifname "uplink0" tcp dport 8080 dnat to 192.168.42.23:9999` + add + `
 		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060
-		iifname "uplink0" udp dport domain dnat to 192.168.42.99:domain
+		iifname "uplink0" udp dport 53 dnat to 192.168.42.99:53
 	}
 
 	chain postrouting {
@@ -159,7 +159,7 @@ table ip filter {
 
 	chain forward {
 		type filter hook forward priority 0; policy accept;
-		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu
+		oifname "uplink0" tcp flags 0x2 tcp option maxseg size set rt mtu
 		counter name "fwded"
 	}
 }
@@ -170,7 +170,7 @@ table ip6 filter {
 
 	chain forward {
 		type filter hook forward priority 0; policy accept;
-		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu
+		oifname "uplink0" tcp flags 0x2 tcp option maxseg size set rt mtu
 		counter name "fwded"
 	}
 }`
@@ -410,7 +410,7 @@ peer: AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=
 	}
 
 	t.Run("VerifyNftables", func(t *testing.T) {
-		rules, err := ipLines("netns", "exec", ns, "nft", "list", "ruleset")
+		rules, err := ipLines("netns", "exec", ns, "nft", "--numeric", "list", "ruleset")
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -433,7 +433,7 @@ peer: AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=
 	}
 
 	t.Run("VerifyAdditionalNftables", func(t *testing.T) {
-		rules, err := ipLines("netns", "exec", ns, "nft", "list", "ruleset")
+		rules, err := ipLines("netns", "exec", ns, "nft", "--numeric", "list", "ruleset")
 		if err != nil {
 			t.Fatal(err)
 		}
