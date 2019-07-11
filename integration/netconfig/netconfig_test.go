@@ -142,9 +142,9 @@ func goldenNftablesRules(additionalForwarding bool) string {
 	return `table ip nat {
 	chain prerouting {
 		type nat hook prerouting priority 0; policy accept;
+		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999` + add + `
+		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060
 		iifname "uplink0" udp dport domain dnat to 192.168.42.99:domain
-		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060` + add + `
-		iifname "uplink0" tcp dport http-alt dnat to 192.168.42.23:9999
 	}
 
 	chain postrouting {
@@ -159,8 +159,8 @@ table ip filter {
 
 	chain forward {
 		type filter hook forward priority 0; policy accept;
-		counter name "fwded"
 		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu
+		counter name "fwded"
 	}
 }
 table ip6 filter {
@@ -170,8 +170,8 @@ table ip6 filter {
 
 	chain forward {
 		type filter hook forward priority 0; policy accept;
-		counter name "fwded"
 		oifname "uplink0" tcp flags syn tcp option maxseg size set rt mtu
+		counter name "fwded"
 	}
 }`
 }
