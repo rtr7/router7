@@ -45,7 +45,7 @@ func Example(t *testing.T) {
 		}
 		return result
 	}
-	if diff := cmp.Diff(got, want, cmp.Transformer("ActionOnly", actionOnly)); diff != "" {
-		t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-got +want):\n%s", diff)
+	if diff := cmp.Diff(want, got, cmp.Transformer("ActionOnly", actionOnly)); diff != "" {
+		t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-want +got):\n%s", diff)
 	}
 }

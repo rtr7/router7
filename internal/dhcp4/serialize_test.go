@@ -44,7 +44,7 @@ func TestSerialize(t *testing.T) {
 	if err := json.Unmarshal(b, &got); err != nil {
 		t.Fatal(err)
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Fatalf("unexpected config: diff (-got +want):\n%s", diff)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("unexpected config: diff (-want +got):\n%s", diff)
 	}
 }

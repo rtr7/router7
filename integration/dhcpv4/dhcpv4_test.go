@@ -166,8 +166,8 @@ func TestDHCPv4(t *testing.T) {
 	trimSpace := func(line string) string {
 		return strings.TrimSpace(line)
 	}
-	if !cmp.Equal(got, want, cmp.Transformer("TrimSpace", trimSpace)) {
-		t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-got +want):\n%s",
+	if !cmp.Equal(want, got, cmp.Transformer("TrimSpace", trimSpace)) {
+		t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-want +got):\n%s",
 			diff.LineDiff(
 				strings.Join(diff.TrimLines(got), "\n"),
 				strings.Join(diff.TrimLines(want), "\n")))

@@ -48,7 +48,7 @@ func TestDiagMonitor(t *testing.T) {
 			},
 		},
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Fatalf("Evaluate(): unexpected result: diff (-got +want):\n%s", diff)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("Evaluate(): unexpected result: diff (-want +got):\n%s", diff)
 	}
 }

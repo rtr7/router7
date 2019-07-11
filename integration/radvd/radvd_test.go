@@ -117,7 +117,7 @@ Retransmit time           :  unspecified (0x00000000)
  Source link-layer address: 02:73:53:00:CA:FE
  from fe80::73:53ff:fe00:cafe
 `
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Fatalf("unexpected rdisc6 output: diff (-got +want):\n%s", diff)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("unexpected rdisc6 output: diff (-want +got):\n%s", diff)
 	}
 }

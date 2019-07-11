@@ -356,8 +356,8 @@ func TestNetconfig(t *testing.T) {
 			t.Fatal(err)
 		}
 
-		if diff := cmp.Diff(routes, wantRoutes); diff != "" {
-			t.Fatalf("routes: diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(wantRoutes, routes); diff != "" {
+			t.Fatalf("routes: diff (-want +got):\n%s", diff)
 		}
 	})
 
@@ -419,8 +419,8 @@ peer: AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=
 		}
 
 		got := strings.Join(rules, "\n")
-		if diff := cmp.Diff(got, goldenNftablesRules(false), opts...); diff != "" {
-			t.Fatalf("unexpected nftables rules: diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(goldenNftablesRules(false), got, opts...); diff != "" {
+			t.Fatalf("unexpected nftables rules: diff (-want +got):\n%s", diff)
 		}
 	})
 

@@ -113,8 +113,8 @@ func TestDHCPv6(t *testing.T) {
 	want := dhcp6.Config{
 		DNS: []string{"2001:db8::1"},
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Fatalf("unexpected config: diff (-got +want):\n%s", diff)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("unexpected config: diff (-want +got):\n%s", diff)
 	}
 
 	c.Release()
@@ -132,8 +132,8 @@ func TestDHCPv6(t *testing.T) {
 		withoutMac := func(line string) string {
 			return v6AddrRe.ReplaceAllString(strings.TrimSpace(line), "")
 		}
-		if diff := cmp.Diff(got, want, cmp.Transformer("WithoutMAC", withoutMac)); diff != "" {
-			t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-got +want):\n%s", diff)
+		if diff := cmp.Diff(want, got, cmp.Transformer("WithoutMAC", withoutMac)); diff != "" {
+			t.Errorf("dnsmasq log does not contain expected DHCP sequence: diff (-want +got):\n%s", diff)
 		}
 	}
 }

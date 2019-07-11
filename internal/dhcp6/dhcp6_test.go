@@ -73,8 +73,8 @@ func TestDHCP6(t *testing.T) {
 			"2001:1620:2777:2::20",
 		},
 	}
-	if diff := cmp.Diff(got, want); diff != "" {
-		t.Fatalf("unexpected config: diff (-got +want):\n%s", diff)
+	if diff := cmp.Diff(want, got); diff != "" {
+		t.Fatalf("unexpected config: diff (-want +got):\n%s", diff)
 	}
 }
 
