@@ -247,6 +247,17 @@ func (s *Server) SetLeases(leases []dhcp4d.Lease) {
 	defer s.mu.Unlock()
 	s.initHostsLocked()
 	now := time.Now()
+	{
+		// defensive copy
+		slice := make([]dhcp4d.Lease, len(leases))
+		copy(slice, leases)
+		leases = slice
+	}
+	// First entry wins, so we order by expiration descendingly to put the
+	// newest entry for any given name into s.hostsByName.
+	sort.Slice(leases, func(i, j int) bool {
+		return !leases[i].Expiry.Before(leases[j].Expiry)
+	})
 	for _, l := range leases {
 		if l.Expired(now) {
 			continue

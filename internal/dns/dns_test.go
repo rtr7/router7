@@ -228,9 +228,7 @@ func TestHostname(t *testing.T) {
 			t.Run(hostname, func(t *testing.T) {
 				m := new(dns.Msg)
 				m.SetQuestion(hostname+".lan.", dns.TypeA)
-				log.Printf("before ServeDNS")
 				s.Mux.ServeDNS(r, m)
-				log.Printf("after ServeDNS")
 				if got, want := len(r.response.Answer), 1; got != want {
 					t.Fatalf("unexpected number of answers for %v: got %d, want %d", m.Question, got, want)
 				}
@@ -258,6 +256,51 @@ func TestHostname(t *testing.T) {
 		}
 		if got, want := a.(*dns.PTR).Ptr, hostname+".lan."; got != want {
 			t.Fatalf("unexpected response record: got %q, want %q", got, want)
+		}
+	})
+
+	t.Run("MoreRecent", func(t *testing.T) {
+		now := time.Now()
+		older := dhcp4d.Lease{
+			Hostname: "xps",
+			Addr:     net.IP{192, 168, 42, 23},
+			Expiry:   now.Add(1 * time.Second),
+		}
+		newer := dhcp4d.Lease{
+			Hostname: "xps",
+			Addr:     net.IP{192, 168, 42, 42},
+			Expiry:   now.Add(2 * time.Second),
+		}
+
+		for _, tt := range []struct {
+			name  string
+			order []dhcp4d.Lease
+		}{
+			{
+				name:  "older, newer",
+				order: []dhcp4d.Lease{older, newer},
+			},
+			{
+				name:  "newer, older",
+				order: []dhcp4d.Lease{newer, older},
+			},
+		} {
+			t.Run(tt.name, func(t *testing.T) {
+				s.SetLeases(tt.order)
+				m := new(dns.Msg)
+				m.SetQuestion("xps.lan.", dns.TypeA)
+				s.Mux.ServeDNS(r, m)
+				if got, want := len(r.response.Answer), 1; got != want {
+					t.Fatalf("unexpected number of answers for %v: got %d, want %d", m.Question, got, want)
+				}
+				a := r.response.Answer[0]
+				if _, ok := a.(*dns.A); !ok {
+					t.Fatalf("unexpected response type: got %T, want dns.A", a)
+				}
+				if got, want := a.(*dns.A).A, net.ParseIP("192.168.42.42"); !got.Equal(want) {
+					t.Fatalf("unexpected response IP: got %v, want %v", got, want)
+				}
+			})
 		}
 	})
 }
