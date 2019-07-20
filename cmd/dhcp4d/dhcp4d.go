@@ -151,7 +151,11 @@ func logic() error {
 			errs <- err
 			return
 		}
-		if err := renameio.WriteFile("/perm/dhcp4d/leases.json", b, 0644); err != nil {
+		var out bytes.Buffer
+		if err := json.Indent(&out, b, "", "\t"); err == nil {
+			b = out.Bytes()
+		}
+		if err := renameio.WriteFile("/perm/dhcp4d/leases.json", out.Bytes(), 0644); err != nil {
 			errs <- err
 		}
 		updateNonExpired(leases)
