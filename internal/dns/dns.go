@@ -38,6 +38,10 @@ import (
 
 var log = teelogger.NewConsole()
 
+// lcHostname is a string type used for lower-cased hostnames so that the
+// DHCP-based local name resolution can be made case-insensitive.
+type lcHostname string
+
 type Server struct {
 	Mux *dns.ServeMux
 
@@ -53,9 +57,9 @@ type Server struct {
 
 	mu           sync.Mutex
 	hostname, ip string
-	hostsByName  map[string]string
+	hostsByName  map[lcHostname]string
 	hostsByIP    map[string]string
-	subnames     map[string]map[string]net.IP // hostname → subname → ip
+	subnames     map[lcHostname]map[string]net.IP // hostname → subname → ip
 
 	upstreamMu sync.RWMutex
 	upstream   []string
@@ -78,7 +82,7 @@ func NewServer(addr, domain string) *Server {
 		sometimes: rate.NewLimiter(rate.Every(1*time.Second), 1), // at most once per second
 		hostname:  hostname,
 		ip:        ip,
-		subnames:  make(map[string]map[string]net.IP),
+		subnames:  make(map[lcHostname]map[string]net.IP),
 	}
 	server.prom.registry = prometheus.NewRegistry()
 
@@ -118,15 +122,16 @@ func NewServer(addr, domain string) *Server {
 }
 
 func (s *Server) initHostsLocked() {
-	s.hostsByName = make(map[string]string)
+	s.hostsByName = make(map[lcHostname]string)
 	s.hostsByIP = make(map[string]string)
 	if s.hostname != "" && s.ip != "" {
-		s.hostsByName[s.hostname] = s.ip
+		lower := strings.ToLower(s.hostname)
+		s.hostsByName[lcHostname(lower)] = s.ip
 		if rev, err := dns.ReverseAddr(s.ip); err == nil {
 			s.hostsByIP[rev] = s.hostname
 		}
-		s.Mux.HandleFunc(s.hostname+".", s.subnameHandler(s.hostname))
-		s.Mux.HandleFunc(s.hostname+"."+s.domain+".", s.subnameHandler(s.hostname))
+		s.Mux.HandleFunc(lower+".", s.subnameHandler(s.hostname))
+		s.Mux.HandleFunc(lower+"."+s.domain+".", s.subnameHandler(s.hostname))
 	}
 }
 
@@ -179,7 +184,7 @@ func (s *Server) probeUpstreamLatency() {
 func (s *Server) hostByName(n string) (string, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	r, ok := s.hostsByName[n]
+	r, ok := s.hostsByName[lcHostname(strings.ToLower(n))]
 	return r, ok
 }
 
@@ -193,7 +198,7 @@ func (s *Server) hostByIP(n string) (string, bool) {
 func (s *Server) subname(hostname, host string) (net.IP, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	r, ok := s.subnames[hostname][host]
+	r, ok := s.subnames[lcHostname(strings.ToLower(hostname))][host]
 	return r, ok
 }
 
@@ -227,10 +232,11 @@ func (s *Server) DyndnsHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err, http.StatusForbidden)
 		return
 	}
-	subnames, ok := s.subnames[hostname]
+	lower := strings.ToLower(hostname)
+	subnames, ok := s.subnames[lcHostname(lower)]
 	if !ok {
 		subnames = make(map[string]net.IP)
-		s.subnames[hostname] = subnames
+		s.subnames[lcHostname(lower)] = subnames
 	}
 	subnames[host] = ip
 	w.Write([]byte("ok\n"))
@@ -248,15 +254,16 @@ func (s *Server) SetLeases(leases []dhcp4d.Lease) {
 		if l.Hostname == "" {
 			continue
 		}
-		if _, ok := s.hostsByName[l.Hostname]; ok {
+		lower := strings.ToLower(l.Hostname)
+		if _, ok := s.hostsByName[lcHostname(lower)]; ok {
 			continue // don’t overwrite e.g. the hostname entry
 		}
-		s.hostsByName[l.Hostname] = l.Addr.String()
+		s.hostsByName[lcHostname(lower)] = l.Addr.String()
 		if rev, err := dns.ReverseAddr(l.Addr.String()); err == nil {
 			s.hostsByIP[rev] = l.Hostname
 		}
-		s.Mux.HandleFunc(l.Hostname+".", s.subnameHandler(l.Hostname))
-		s.Mux.HandleFunc(l.Hostname+"."+s.domain+".", s.subnameHandler(l.Hostname))
+		s.Mux.HandleFunc(lower+".", s.subnameHandler(l.Hostname))
+		s.Mux.HandleFunc(lower+"."+s.domain+".", s.subnameHandler(l.Hostname))
 	}
 }
 
@@ -315,7 +322,7 @@ func (s *Server) resolve(q dns.Question) (rr dns.RR, err error) {
 	if q.Qclass != dns.ClassINET {
 		return nil, nil
 	}
-	if q.Name == "localhost." {
+	if strings.ToLower(q.Name) == "localhost." {
 		if q.Qtype == dns.TypeAAAA {
 			return dns.NewRR(q.Name + " 3600 IN AAAA ::1")
 		}
@@ -428,8 +435,8 @@ func (s *Server) resolveSubname(hostname string, q dns.Question) (dns.RR, error)
 		name := strings.TrimSuffix(q.Name, "."+hostname+".")
 		name = strings.TrimSuffix(name, "."+hostname+"."+s.domain+".")
 
-		if q.Name == hostname+"." ||
-			q.Name == hostname+"."+s.domain+"." {
+		if lower := strings.ToLower(q.Name); lower == hostname+"." ||
+			lower == hostname+"."+s.domain+"." {
 			host, _ := s.hostByName(hostname)
 			if q.Qtype == dns.TypeA {
 				return dns.NewRR(q.Name + " 3600 IN A " + host)
