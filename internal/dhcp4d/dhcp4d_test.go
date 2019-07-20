@@ -89,6 +89,7 @@ func testHandler(t *testing.T) (_ *Handler, cleanup func()) {
 		&net.Interface{
 			HardwareAddr: net.HardwareAddr([]byte{0x11, 0x22, 0x33, 0x44, 0x55, 0x66}),
 		},
+		"lan0",
 		&noopSink{},
 	)
 	if err != nil {
