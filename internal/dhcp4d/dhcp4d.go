@@ -59,13 +59,13 @@ type Handler struct {
 	Leases func([]*Lease, *Lease)
 }
 
-func NewHandler(dir string, iface *net.Interface, conn net.PacketConn) (*Handler, error) {
-	serverIP, err := netconfig.LinkAddress(dir, "lan0")
+func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.PacketConn) (*Handler, error) {
+	serverIP, err := netconfig.LinkAddress(dir, ifaceName)
 	if err != nil {
 		return nil, err
 	}
 	if iface == nil {
-		iface, err = net.InterfaceByName("lan0")
+		iface, err = net.InterfaceByName(ifaceName)
 		if err != nil {
 			return nil, err
 		}

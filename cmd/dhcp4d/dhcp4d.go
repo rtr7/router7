@@ -42,6 +42,8 @@ import (
 	"github.com/rtr7/router7/internal/teelogger"
 )
 
+var iface = flag.String("interface", "lan0", "ethernet interface to listen for DHCPv4 requests on")
+
 var log = teelogger.NewConsole()
 
 var nonExpiredLeases = promauto.NewGauge(prometheus.GaugeOpts{
@@ -137,7 +139,11 @@ func logic() error {
 		return err
 	}
 	errs := make(chan error)
-	handler, err := dhcp4d.NewHandler("/perm", nil, nil)
+	ifc, err := net.InterfaceByName(*iface)
+	if err != nil {
+		return err
+	}
+	handler, err := dhcp4d.NewHandler("/perm", ifc, *iface, nil)
 	if err != nil {
 		return err
 	}
@@ -163,7 +169,7 @@ func logic() error {
 			log.Printf("notifying dnsd: %v", err)
 		}
 	}
-	conn, err := conn.NewUDP4BoundListener("lan0", ":67") // TODO: customizeable
+	conn, err := conn.NewUDP4BoundListener(*iface, ":67")
 	if err != nil {
 		return err
 	}
