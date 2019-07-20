@@ -16,14 +16,17 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"html/template"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"sort"
 	"syscall"
 	"time"
 
@@ -65,6 +68,106 @@ func updateNonExpired(leases []*dhcp4d.Lease) {
 
 var ouiDB = oui.NewDB("/perm/dhcp4d/oui")
 
+var leases []*dhcp4d.Lease
+
+var (
+	timefmt = func(t time.Time) string {
+		return t.Format("2006-01-02 15:04")
+	}
+	leasesTmpl = template.Must(template.New("").Funcs(template.FuncMap{
+		"timefmt": timefmt,
+		"since": func(t time.Time) string {
+			dur := time.Since(t)
+			if dur.Hours() > 24 {
+				return timefmt(t)
+			}
+			return dur.Truncate(1 * time.Second).String()
+		},
+	}).Parse(`<!DOCTYPE html>
+<head>
+<meta charset="utf-8">
+<title>DHCPv4 status</title>
+<style type="text/css">
+body {
+  margin-left: 1em;
+}
+td, th {
+  padding-left: 1em;
+  padding-right: 1em;
+  padding-bottom: .25em;
+}
+td:first-child, th:first-child {
+  padding-left: .25em;
+}
+td:last-child, th:last-child {
+  padding-right: .25em;
+}
+th {
+  padding-top: 1em;
+  text-align: left;
+}
+span.active, span.expired, span.static {
+  min-width: 5em;
+  display: inline-block;
+  text-align: center;
+  border: 1px solid grey;
+  border-radius: 5px;
+}
+span.active {
+  background-color: #00f000;
+}
+span.expired {
+  background-color: #f00000;
+}
+.ipaddr, .hwaddr {
+  font-family: monospace;
+}
+tr:nth-child(even) {
+  background: #eee;
+}
+</style>
+</head>
+<body>
+{{ define "table" }}
+<tr>
+<th>IP address</th>
+<th>Hostname</th>
+<th>MAC address</th>
+<th>Vendor</th>
+<th>Expiry</th>
+</tr>
+{{ range $idx, $l := . }}
+<tr>
+<td class="ipaddr">{{$l.Addr}}</td>
+<td>{{$l.Hostname}}</td>
+<td class="hwaddr">{{$l.HardwareAddr}}</td>
+<td>{{$l.Vendor}}</td>
+<td title="{{ timefmt $l.Expiry }}">
+{{ if $l.Expired }}
+{{ since $l.Expiry }}
+<span class="expired">expired</span>
+{{ else }}
+{{ if $l.Static }}
+<span class="static">static</span>
+{{ else }}
+{{ timefmt $l.Expiry }}
+<span class="active">active</span>
+{{ end }}
+{{ end }}
+</td>
+</tr>
+{{ end }}
+{{ end }}
+
+<table cellpadding="0" cellspacing="0">
+{{ template "table" .StaticLeases }}
+{{ template "table" .DynamicLeases }}
+</table>
+</body>
+</html>
+`))
+)
+
 func loadLeases(h *dhcp4d.Handler, fn string) error {
 	b, err := ioutil.ReadFile(fn)
 	if err != nil {
@@ -73,7 +176,7 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 		}
 		return err
 	}
-	var leases []*dhcp4d.Lease
+
 	if err := json.Unmarshal(b, &leases); err != nil {
 		return err
 	}
@@ -94,9 +197,48 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 			http.Error(w, fmt.Sprintf("access from %v forbidden", ip), http.StatusForbidden)
 			return
 		}
-		// TODO: html template
+
+		type tmplLease struct {
+			dhcp4d.Lease
+
+			Vendor  string
+			Expired bool
+			Static  bool
+		}
+
+		static := make([]tmplLease, 0, len(leases))
+		dynamic := make([]tmplLease, 0, len(leases))
+		tl := func(l *dhcp4d.Lease) tmplLease {
+			return tmplLease{
+				Lease:   *l,
+				Vendor:  ouiDB.Lookup(l.HardwareAddr[:8]),
+				Expired: l.Expired(time.Now()),
+				Static:  l.Expiry.IsZero(),
+			}
+		}
 		for _, l := range leases {
-			fmt.Fprintf(w, "• %+v (vendor %v)\n", l, ouiDB.Lookup(l.HardwareAddr[:8]))
+			if l.Expiry.IsZero() {
+				static = append(static, tl(l))
+			} else {
+				dynamic = append(dynamic, tl(l))
+			}
+		}
+		sort.Slice(static, func(i, j int) bool {
+			return static[i].Num < static[j].Num
+		})
+		sort.Slice(dynamic, func(i, j int) bool {
+			return !dynamic[i].Expiry.Before(dynamic[j].Expiry)
+		})
+
+		if err := leasesTmpl.Execute(w, struct {
+			StaticLeases  []tmplLease
+			DynamicLeases []tmplLease
+		}{
+			StaticLeases:  static,
+			DynamicLeases: dynamic,
+		}); err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
 		}
 	})
 
@@ -150,7 +292,8 @@ func logic() error {
 	if err := loadLeases(handler, "/perm/dhcp4d/leases.json"); err != nil {
 		return err
 	}
-	handler.Leases = func(leases []*dhcp4d.Lease, latest *dhcp4d.Lease) {
+	handler.Leases = func(newLeases []*dhcp4d.Lease, latest *dhcp4d.Lease) {
+		leases = newLeases
 		log.Printf("DHCPACK %+v", latest)
 		b, err := json.Marshal(leases)
 		if err != nil {
