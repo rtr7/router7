@@ -384,7 +384,13 @@ peer: ScxV5nQsUIaaOp3qdwPqRcgMkR3oR6nyi1tBLUovqBs=
 peer: AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=
   endpoint: [::1]:12345
   allowed ips: 10.0.0.0/8`
-		if got := strings.TrimSpace(string(out)); got != want {
+		got := strings.TrimSpace(string(out))
+		// Enforce an order (it can change, or did change between kernel
+		// versions):
+		got = strings.ReplaceAll(got,
+			"  allowed ips: fe80::/64, 10.0.137.0/24",
+			"  allowed ips: 10.0.137.0/24, fe80::/64")
+		if got != want {
 			t.Fatalf("unexpected wg output: diff (-want +got):\n%s", diff.LineDiff(want, got))
 		}
 
