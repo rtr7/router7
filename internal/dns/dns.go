@@ -273,8 +273,8 @@ func (s *Server) SetLeases(leases []dhcp4d.Lease) {
 		if rev, err := dns.ReverseAddr(l.Addr.String()); err == nil {
 			s.hostsByIP[rev] = l.Hostname
 		}
-		s.Mux.HandleFunc(lower+".", s.subnameHandler(l.Hostname))
-		s.Mux.HandleFunc(lower+"."+s.domain+".", s.subnameHandler(l.Hostname))
+		s.Mux.HandleFunc(lower+".", s.subnameHandler(lower))
+		s.Mux.HandleFunc(lower+"."+s.domain+".", s.subnameHandler(lower))
 	}
 }
 

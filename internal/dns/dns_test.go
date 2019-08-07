@@ -511,6 +511,25 @@ func resolveTestTarget(s *Server, name string, want net.IP) error {
 
 // TODO: multiple questions
 
+func TestUppercase(t *testing.T) {
+	s := NewServer("127.0.0.2:0", "lan")
+	s.SetLeases([]dhcp4d.Lease{
+		{
+			Hostname: "UPPERCASE",
+			Addr:     net.IP{192, 168, 42, 23},
+		},
+	})
+	for _, casing := range []string{
+		"UPPERCASE",
+		"uppercase",
+		"upperCase",
+	} {
+		if err := resolveTestTarget(s, casing+".lan.", net.ParseIP("192.168.42.23")); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestSubname(t *testing.T) {
 	r := &recorder{}
 	s := NewServer("127.0.0.2:0", "lan")
