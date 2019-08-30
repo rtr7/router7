@@ -31,11 +31,12 @@ import (
 )
 
 type Lease struct {
-	Num          int       `json:"num"` // relative to Handler.start
-	Addr         net.IP    `json:"addr"`
-	HardwareAddr string    `json:"hardware_addr"`
-	Hostname     string    `json:"hostname"`
-	Expiry       time.Time `json:"expiry"`
+	Num              int       `json:"num"` // relative to Handler.start
+	Addr             net.IP    `json:"addr"`
+	HardwareAddr     string    `json:"hardware_addr"`
+	Hostname         string    `json:"hostname"`
+	HostnameOverride string    `json:"hostname_override"`
+	Expiry           time.Time `json:"expiry"`
 }
 
 func (l *Lease) Expired(at time.Time) bool {
@@ -276,6 +277,10 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 				// Retain permanent lease properties
 				lease.Expiry = time.Time{}
 				lease.Hostname = l.Hostname
+			}
+			if l.HostnameOverride != "" {
+				lease.Hostname = l.HostnameOverride
+				lease.HostnameOverride = l.HostnameOverride
 			}
 
 			// Release any old leases for this client

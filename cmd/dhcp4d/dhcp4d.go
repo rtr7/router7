@@ -106,7 +106,7 @@ th {
   padding-top: 1em;
   text-align: left;
 }
-span.active, span.expired, span.static {
+span.active, span.expired, span.static, span.hostname-override {
   min-width: 5em;
   display: inline-block;
   text-align: center;
@@ -118,6 +118,10 @@ span.active {
 }
 span.expired {
   background-color: #f00000;
+}
+span.hostname-override {
+  min-width: 1em;
+  background-color: orange;
 }
 .ipaddr, .hwaddr {
   font-family: monospace;
@@ -139,7 +143,12 @@ tr:nth-child(even) {
 {{ range $idx, $l := . }}
 <tr>
 <td class="ipaddr">{{$l.Addr}}</td>
-<td>{{$l.Hostname}}</td>
+<td>
+{{$l.Hostname}}
+{{ if (ne $l.HostnameOverride "") }}
+<span class="hostname-override">!</span>
+{{ end }}
+</td>
 <td class="hwaddr">{{$l.HardwareAddr}}</td>
 <td>{{$l.Vendor}}</td>
 <td title="{{ timefmt $l.Expiry }}">
