@@ -187,6 +187,11 @@ func TestDHCP(t *testing.T) {
 			Addr:     net.IP{192, 168, 42, 150},
 			Expiry:   expired,
 		},
+		{
+			Hostname: "aged",
+			Addr:     net.IP{192, 168, 42, 42},
+			Expiry:   time.Now().Add(1 * time.Minute),
+		},
 	})
 
 	t.Run("testtarget.lan. (expired)", func(t *testing.T) {
@@ -198,6 +203,23 @@ func TestDHCP(t *testing.T) {
 	t.Run("notfound.lan.", func(t *testing.T) {
 		m := new(dns.Msg)
 		m.SetQuestion("notfound.lan.", dns.TypeA)
+		s.Mux.ServeDNS(r, m)
+		if got, want := r.response.Rcode, dns.RcodeNameError; got != want {
+			t.Fatalf("unexpected rcode: got %v, want %v", got, want)
+		}
+	})
+
+	s.SetLeases([]dhcp4d.Lease{
+		{
+			Hostname: "aged",
+			Addr:     net.IP{192, 168, 42, 42},
+			Expiry:   expired,
+		},
+	})
+
+	t.Run("aged.lan. (expired)", func(t *testing.T) {
+		m := new(dns.Msg)
+		m.SetQuestion("aged.lan.", dns.TypeA)
 		s.Mux.ServeDNS(r, m)
 		if got, want := r.response.Rcode, dns.RcodeNameError; got != want {
 			t.Fatalf("unexpected rcode: got %v, want %v", got, want)

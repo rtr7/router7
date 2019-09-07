@@ -448,7 +448,12 @@ func (s *Server) resolveSubname(hostname string, q dns.Question) (dns.RR, error)
 
 		if lower := strings.ToLower(q.Name); lower == hostname+"." ||
 			lower == hostname+"."+s.domain+"." {
-			host, _ := s.hostByName(hostname)
+			host, ok := s.hostByName(hostname)
+			if !ok {
+				// The corresponding DHCP lease might have expired, but this
+				// handler is still installed on the mux.
+				return nil, nil // NXDOMAIN
+			}
 			if q.Qtype == dns.TypeA {
 				return dns.NewRR(q.Name + " 3600 IN A " + host)
 			}
@@ -482,7 +487,7 @@ func (s *Server) subnameHandler(hostname string) func(w dns.ResponseWriter, r *d
 				w.WriteMsg(m)
 				return
 			}
-			log.Fatal(err)
+			log.Fatalf("question %#v: %v", r.Question[0], err)
 		}
 		if rr != nil {
 			m := new(dns.Msg)
