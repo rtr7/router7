@@ -280,7 +280,7 @@ func (c *Client) ObtainOrRenew() bool {
 	for _, opt := range reply.Options {
 		switch o := opt.(type) {
 		case *dhcpv6.OptIAForPrefixDelegation:
-			t1 := c.timeNow().Add(time.Duration(o.T1) * time.Second)
+			t1 := c.timeNow().Add(o.T1)
 			if t1.Before(newCfg.RenewAfter) || newCfg.RenewAfter.IsZero() {
 				newCfg.RenewAfter = t1
 			}
