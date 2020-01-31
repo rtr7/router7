@@ -21,12 +21,14 @@ import (
 	"flag"
 	"fmt"
 	"html/template"
+	"io"
 	"io/ioutil"
 	"net"
 	"net/http"
 	"os"
 	"os/signal"
 	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -248,6 +250,36 @@ func logic() error {
 	if err := loadLeases(handler, "/perm/dhcp4d/leases.json"); err != nil {
 		return err
 	}
+
+	http.HandleFunc("/lease/", func(w http.ResponseWriter, r *http.Request) {
+		hostname := strings.TrimPrefix(r.URL.Path, "/lease/")
+		if hostname == "" {
+			http.Error(w, "syntax: /lease/<hostname>", http.StatusBadRequest)
+			return
+		}
+		leasesMu.Lock()
+		defer leasesMu.Unlock()
+		var lease *dhcp4d.Lease
+		for _, l := range leases {
+			if l.Hostname != hostname {
+				continue
+			}
+			lease = l
+			break
+		}
+		if lease == nil {
+			http.Error(w, "no lease found", http.StatusNotFound)
+			return
+		}
+		b, err := json.Marshal(lease)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
+		if _, err := io.Copy(w, bytes.NewReader(b)); err != nil {
+			log.Printf("/lease/%s: %v", hostname, err)
+		}
+	})
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
