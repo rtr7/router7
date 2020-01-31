@@ -27,6 +27,7 @@ import (
 	"os"
 	"os/signal"
 	"sort"
+	"sync"
 	"syscall"
 	"time"
 
@@ -68,7 +69,10 @@ func updateNonExpired(leases []*dhcp4d.Lease) {
 
 var ouiDB = oui.NewDB("/perm/dhcp4d/oui")
 
-var leases []*dhcp4d.Lease
+var (
+	leasesMu sync.Mutex
+	leases   []*dhcp4d.Lease
+)
 
 var (
 	timefmt = func(t time.Time) string {
@@ -186,6 +190,8 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 		return err
 	}
 
+	leasesMu.Lock()
+	defer leasesMu.Unlock()
 	if err := json.Unmarshal(b, &leases); err != nil {
 		return err
 	}
@@ -215,6 +221,8 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 			Static  bool
 		}
 
+		leasesMu.Lock()
+		defer leasesMu.Unlock()
 		static := make([]tmplLease, 0, len(leases))
 		dynamic := make([]tmplLease, 0, len(leases))
 		tl := func(l *dhcp4d.Lease) tmplLease {
@@ -302,6 +310,8 @@ func logic() error {
 		return err
 	}
 	handler.Leases = func(newLeases []*dhcp4d.Lease, latest *dhcp4d.Lease) {
+		leasesMu.Lock()
+		defer leasesMu.Unlock()
 		leases = newLeases
 		log.Printf("DHCPACK %+v", latest)
 		b, err := json.Marshal(leases)
