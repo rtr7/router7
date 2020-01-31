@@ -89,7 +89,7 @@ func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.Pac
 		serverIP:    serverIP,
 		start:       start,
 		leaseRange:  230,
-		leasePeriod: 2 * time.Hour,
+		leasePeriod: 20 * time.Minute,
 		options: dhcp4.Options{
 			dhcp4.OptionSubnetMask:       []byte{255, 255, 255, 0},
 			dhcp4.OptionRouter:           []byte(serverIP),
