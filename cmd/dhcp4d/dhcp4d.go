@@ -17,6 +17,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -27,6 +28,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"sort"
 	"strings"
 	"sync"
@@ -220,10 +222,15 @@ func updateListeners() error {
 	return nil
 }
 
-func logic() error {
+type srv struct {
+	errs   chan error
+	leases func(newLeases []*dhcp4d.Lease, latest *dhcp4d.Lease)
+}
+
+func newSrv(permDir string) (*srv, error) {
 	http.Handle("/metrics", promhttp.Handler())
 	if err := updateListeners(); err != nil {
-		return err
+		return nil, err
 	}
 	go func() {
 		ch := make(chan os.Signal, 1)
@@ -235,20 +242,20 @@ func logic() error {
 		}
 	}()
 
-	if err := os.MkdirAll("/perm/dhcp4d", 0755); err != nil {
-		return err
+	if err := os.MkdirAll(filepath.Join(permDir, "dhcp4d"), 0755); err != nil {
+		return nil, err
 	}
 	errs := make(chan error)
 	ifc, err := net.InterfaceByName(*iface)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	handler, err := dhcp4d.NewHandler("/perm", ifc, *iface, nil)
+	handler, err := dhcp4d.NewHandler(permDir, ifc, *iface, nil)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := loadLeases(handler, "/perm/dhcp4d/leases.json"); err != nil {
-		return err
+	if err := loadLeases(handler, filepath.Join(permDir, "dhcp4d/leases.json")); err != nil {
+		return nil, err
 	}
 
 	http.HandleFunc("/lease/", func(w http.ResponseWriter, r *http.Request) {
@@ -356,7 +363,7 @@ func logic() error {
 		if err := json.Indent(&out, b, "", "\t"); err == nil {
 			b = out.Bytes()
 		}
-		if err := renameio.WriteFile("/perm/dhcp4d/leases.json", out.Bytes(), 0644); err != nil {
+		if err := renameio.WriteFile(filepath.Join(permDir, "dhcp4d/leases.json"), out.Bytes(), 0644); err != nil {
 			errs <- err
 		}
 		updateNonExpired(leases)
@@ -366,18 +373,34 @@ func logic() error {
 	}
 	conn, err := conn.NewUDP4BoundListener(*iface, ":67")
 	if err != nil {
-		return err
+		return nil, err
 	}
 	go func() {
 		errs <- dhcp4.Serve(conn, handler)
 	}()
-	return <-errs
+	return &srv{
+		errs,
+		handler.Leases,
+	}, nil
+}
+
+func (s *srv) run(ctx context.Context) error {
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case err := <-s.errs:
+		return err
+	}
 }
 
 func main() {
 	// TODO: drop privileges, run as separate uid?
 	flag.Parse()
-	if err := logic(); err != nil {
+	srv, err := newSrv("/perm")
+	if err != nil {
+		log.Fatal(err)
+	}
+	if err := srv.run(context.Background()); err != nil {
 		log.Fatal(err)
 	}
 }
