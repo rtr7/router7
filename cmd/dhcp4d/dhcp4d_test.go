@@ -92,6 +92,24 @@ func TestLeaseHandler(t *testing.T) {
 	if diff := cmp.Diff(lease, got); diff != "" {
 		t.Fatalf("/lease/midna: unexpected lease: diff (-want +got):\n%s", diff)
 	}
+
+	if got, want := resp.Header.Get("X-Lease-Active"), "true"; got != want {
+		t.Fatalf("Unexpected X-Lease-Active header: got %q, want %s", got, want)
+	}
+	lease.Expiry = time.Now().Add(-1 * time.Minute)
+	srv.leases([]*dhcp4d.Lease{&lease}, &lease)
+	resp, err = http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got, want := resp.StatusCode, http.StatusOK; got != want {
+		b, _ := ioutil.ReadAll(resp.Body)
+		t.Fatalf("unexpected HTTP response code: got %v (%s), want %v", resp.Status, strings.TrimSpace(string(b)), want)
+	}
+	if got, want := resp.Header.Get("X-Lease-Active"), "false"; got != want {
+		t.Fatalf("Unexpected X-Lease-Active header: got %q, want %s", got, want)
+	}
+
 	canc()
 	if err := eg.Wait(); err != nil && err != context.Canceled {
 		t.Fatal(err)

@@ -47,7 +47,7 @@ type Handler struct {
 	serverIP    net.IP
 	start       net.IP // first IP address to hand out
 	leaseRange  int    // number of IP addresses to hand out
-	leasePeriod time.Duration
+	LeasePeriod time.Duration
 	options     dhcp4.Options
 	leasesHW    map[string]int // points into leasesIP
 	leasesIP    map[int]*Lease
@@ -89,7 +89,7 @@ func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.Pac
 		serverIP:    serverIP,
 		start:       start,
 		leaseRange:  230,
-		leasePeriod: 20 * time.Minute,
+		LeasePeriod: 20 * time.Minute,
 		options: dhcp4.Options{
 			dhcp4.OptionSubnetMask:       []byte{255, 255, 255, 0},
 			dhcp4.OptionRouter:           []byte(serverIP),
@@ -251,7 +251,7 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			dhcp4.Offer,
 			h.serverIP,
 			dhcp4.IPAdd(h.start, free),
-			h.leasePeriod,
+			h.LeasePeriod,
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
 
 	case dhcp4.Request:
@@ -267,7 +267,7 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			Num:          leaseNum,
 			Addr:         make([]byte, 4),
 			HardwareAddr: p.CHAddr().String(),
-			Expiry:       h.timeNow().Add(h.leasePeriod),
+			Expiry:       h.timeNow().Add(h.LeasePeriod),
 			Hostname:     string(options[dhcp4.OptionHostName]),
 		}
 		copy(lease.Addr, reqIP.To4())
@@ -296,7 +296,7 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			}
 			h.Leases(leases, lease)
 		}
-		return dhcp4.ReplyPacket(p, dhcp4.ACK, h.serverIP, reqIP, h.leasePeriod,
+		return dhcp4.ReplyPacket(p, dhcp4.ACK, h.serverIP, reqIP, h.LeasePeriod,
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
 	}
 	return nil
