@@ -198,6 +198,57 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 	h.SetLeases(leases)
 	updateNonExpired(leases)
 
+	return nil
+}
+
+var httpListeners = multilisten.NewPool()
+
+func updateListeners() error {
+	hosts, err := gokrazy.PrivateInterfaceAddrs()
+	if err != nil {
+		return err
+	}
+	if net1, err := multilisten.IPv6Net1("/perm"); err == nil {
+		hosts = append(hosts, net1)
+	}
+
+	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return &http.Server{Addr: net.JoinHostPort(host, "8067")}
+	})
+	return nil
+}
+
+func logic() error {
+	http.Handle("/metrics", promhttp.Handler())
+	if err := updateListeners(); err != nil {
+		return err
+	}
+	go func() {
+		ch := make(chan os.Signal, 1)
+		signal.Notify(ch, syscall.SIGUSR1)
+		for range ch {
+			if err := updateListeners(); err != nil {
+				log.Printf("updateListeners: %v", err)
+			}
+		}
+	}()
+
+	if err := os.MkdirAll("/perm/dhcp4d", 0755); err != nil {
+		return err
+	}
+	errs := make(chan error)
+	ifc, err := net.InterfaceByName(*iface)
+	if err != nil {
+		return err
+	}
+	handler, err := dhcp4d.NewHandler("/perm", ifc, *iface, nil)
+	if err != nil {
+		return err
+	}
+	if err := loadLeases(handler, "/perm/dhcp4d/leases.json"); err != nil {
+		return err
+	}
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		host, _, err := net.SplitHostPort(r.RemoteAddr)
 		if err != nil {
@@ -259,56 +310,6 @@ func loadLeases(h *dhcp4d.Handler, fn string) error {
 		}
 	})
 
-	return nil
-}
-
-var httpListeners = multilisten.NewPool()
-
-func updateListeners() error {
-	hosts, err := gokrazy.PrivateInterfaceAddrs()
-	if err != nil {
-		return err
-	}
-	if net1, err := multilisten.IPv6Net1("/perm"); err == nil {
-		hosts = append(hosts, net1)
-	}
-
-	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
-		return &http.Server{Addr: net.JoinHostPort(host, "8067")}
-	})
-	return nil
-}
-
-func logic() error {
-	http.Handle("/metrics", promhttp.Handler())
-	if err := updateListeners(); err != nil {
-		return err
-	}
-	go func() {
-		ch := make(chan os.Signal, 1)
-		signal.Notify(ch, syscall.SIGUSR1)
-		for range ch {
-			if err := updateListeners(); err != nil {
-				log.Printf("updateListeners: %v", err)
-			}
-		}
-	}()
-
-	if err := os.MkdirAll("/perm/dhcp4d", 0755); err != nil {
-		return err
-	}
-	errs := make(chan error)
-	ifc, err := net.InterfaceByName(*iface)
-	if err != nil {
-		return err
-	}
-	handler, err := dhcp4d.NewHandler("/perm", ifc, *iface, nil)
-	if err != nil {
-		return err
-	}
-	if err := loadLeases(handler, "/perm/dhcp4d/leases.json"); err != nil {
-		return err
-	}
 	handler.Leases = func(newLeases []*dhcp4d.Lease, latest *dhcp4d.Lease) {
 		leasesMu.Lock()
 		defer leasesMu.Unlock()
