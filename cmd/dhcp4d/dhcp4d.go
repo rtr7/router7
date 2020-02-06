@@ -283,7 +283,7 @@ func newSrv(permDir string) (*srv, error) {
 			http.Error(w, err.Error(), http.StatusInternalServerError)
 			return
 		}
-		w.Header().Set("X-Lease-Active", fmt.Sprint(lease.Expiry.After(time.Now().Add(handler.LeasePeriod/2))))
+		w.Header().Set("X-Lease-Active", fmt.Sprint(lease.Expiry.After(time.Now().Add(handler.LeasePeriod*2/3))))
 		if _, err := io.Copy(w, bytes.NewReader(b)); err != nil {
 			log.Printf("/lease/%s: %v", hostname, err)
 		}
