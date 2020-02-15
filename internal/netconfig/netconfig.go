@@ -310,13 +310,13 @@ func applyInterfaces(dir, root string) error {
 	return nil
 }
 
-func ifname(n string) []byte {
+func nfifname(n string) []byte {
 	b := make([]byte, 16)
 	copy(b, []byte(n+"\x00"))
 	return b
 }
 
-func portForwardExpr(proto uint8, portMin, portMax uint16, dest net.IP, dportMin, dportMax uint16) []expr.Any {
+func portForwardExpr(ifname string, proto uint8, portMin, portMax uint16, dest net.IP, dportMin, dportMax uint16) []expr.Any {
 	var cmp []expr.Any
 	if portMin == portMax {
 		cmp = []expr.Any{
@@ -350,7 +350,7 @@ func portForwardExpr(proto uint8, portMin, portMax uint16, dest net.IP, dportMin
 		&expr.Cmp{
 			Op:       expr.CmpOpEq,
 			Register: 1,
-			Data:     ifname("uplink0"),
+			Data:     nfifname(ifname),
 		},
 
 		// [ meta load l4proto => reg 1 ]
@@ -450,7 +450,7 @@ func parsePort(p string) (min uint16, max uint16, _ error) {
 	return uint16(min64), uint16(max64), nil
 }
 
-func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, prerouting *nftables.Chain) error {
+func applyPortForwardings(dir, ifname string, c *nftables.Conn, nat *nftables.Table, prerouting *nftables.Chain) error {
 	b, err := ioutil.ReadFile(filepath.Join(dir, "portforwardings.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -487,7 +487,7 @@ func applyPortForwardings(dir string, c *nftables.Conn, nat *nftables.Table, pre
 			c.AddRule(&nftables.Rule{
 				Table: nat,
 				Chain: prerouting,
-				Exprs: portForwardExpr(p, min, max, net.ParseIP(fw.DestAddr), dmin, dmax),
+				Exprs: portForwardExpr(ifname, p, min, max, net.ParseIP(fw.DestAddr), dmin, dmax),
 			})
 		}
 	}
@@ -534,7 +534,7 @@ func getCounterObj(c *nftables.Conn, o *nftables.CounterObj) *nftables.CounterOb
 	return o
 }
 
-func applyFirewall(dir string) error {
+func applyFirewall(dir, ifname string) error {
 	c := &nftables.Conn{}
 
 	c.FlushRuleset()
@@ -570,14 +570,14 @@ func applyFirewall(dir string) error {
 			&expr.Cmp{
 				Op:       expr.CmpOpEq,
 				Register: 1,
-				Data:     ifname("uplink0"),
+				Data:     nfifname(ifname),
 			},
 			// masq
 			&expr.Masq{},
 		},
 	})
 
-	if err := applyPortForwardings(dir, c, nat, prerouting); err != nil {
+	if err := applyPortForwardings(dir, ifname, c, nat, prerouting); err != nil {
 		return err
 	}
 
@@ -610,7 +610,7 @@ func applyFirewall(dir string) error {
 				&expr.Cmp{
 					Op:       expr.CmpOpEq,
 					Register: 1,
-					Data:     ifname("uplink0"),
+					Data:     nfifname(ifname),
 				},
 
 				// [ meta load l4proto => reg 1 ]
@@ -691,12 +691,30 @@ func applyFirewall(dir string) error {
 	return c.Flush()
 }
 
-func applySysctl() error {
-	for _, ctl := range []string{
+func uplinkInterface() (string, error) {
+	names := []string{
+		"uplink0", // router7
+		"eth0",    // gokrazy
+		"ens3",    // distri
+	}
+	for _, ifname := range names {
+		if _, err := net.InterfaceByName(ifname); err != nil {
+			continue
+		}
+		return ifname, nil
+	}
+	return "", fmt.Errorf("no uplink ethernet interface found (checked %v)", names)
+}
+
+func applySysctl(ifname string) error {
+	sysctls := []string{
 		"net.ipv4.ip_forward=1",
 		"net.ipv6.conf.all.forwarding=1",
-		"net.ipv6.conf.uplink0.accept_ra=2",
-	} {
+	}
+	if ifname != "" {
+		sysctls = append(sysctls, "net.ipv6.conf."+ifname+".accept_ra=2")
+	}
+	for _, ctl := range sysctls {
 		idx := strings.Index(ctl, "=")
 		key, val := ctl[:idx], ctl[idx+1:]
 		fn := strings.Replace(key, ".", "/", -1)
@@ -751,9 +769,15 @@ func Apply(dir, root string) error {
 		} else {
 			log.Printf("cannot apply sysctl config: %v", err)
 		}
+	ifname, err := uplinkInterface()
+	if err != nil {
+		log.Printf("uplinkInterface: %v", err)
 	}
 
-	if err := applyFirewall(dir); err != nil {
+	if err := applySysctl(ifname); err != nil {
+	}
+
+	if err := applyFirewall(dir, ifname); err != nil {
 		return fmt.Errorf("firewall: %v", err)
 	}
 
