@@ -219,6 +219,9 @@ func LinkAddress(dir, ifname string) (net.IP, error) {
 func applyInterfaces(dir, root string) error {
 	b, err := ioutil.ReadFile(filepath.Join(dir, "interfaces.json"))
 	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	var cfg InterfaceConfig
