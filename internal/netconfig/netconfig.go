@@ -733,22 +733,18 @@ func Apply(dir, root string) error {
 		return fmt.Errorf("interfaces: %v", err)
 	}
 
-	var firstErr error
+	var errors []error
+	appendError := func(err error) {
+		errors = append(errors, err)
+		log.Println(err)
+	}
 
 	if err := applyDhcp4(dir); err != nil {
-		if firstErr == nil {
-			firstErr = fmt.Errorf("dhcp4: %v", err)
-		} else {
-			log.Printf("cannot apply dhcp4 lease: %v", err)
-		}
+		appendError(fmt.Errorf("dhcp4: %v", err))
 	}
 
 	if err := applyDhcp6(dir); err != nil {
-		if firstErr == nil {
-			firstErr = fmt.Errorf("dhcp6: %v", err)
-		} else {
-			log.Printf("cannot apply dhcp6 lease: %v", err)
-		}
+		appendError(fmt.Errorf("dhcp6: %v", err))
 	}
 
 	for _, process := range []string{
@@ -763,27 +759,25 @@ func Apply(dir, root string) error {
 		}
 	}
 
-	if err := applySysctl(); err != nil {
-		if firstErr == nil {
-			firstErr = fmt.Errorf("sysctl: %v", err)
-		} else {
-			log.Printf("cannot apply sysctl config: %v", err)
-		}
 	ifname, err := uplinkInterface()
 	if err != nil {
 		log.Printf("uplinkInterface: %v", err)
 	}
 
 	if err := applySysctl(ifname); err != nil {
+		appendError(fmt.Errorf("sysctl: %v", err))
 	}
 
 	if err := applyFirewall(dir, ifname); err != nil {
-		return fmt.Errorf("firewall: %v", err)
+		appendError(fmt.Errorf("firewall: %v", err))
 	}
 
 	if err := applyWireGuard(dir); err != nil {
-		return fmt.Errorf("wireguard: %v", err)
+		appendError(fmt.Errorf("wireguard: %v", err))
 	}
 
-	return firstErr
+	if len(errors) > 0 {
+		return fmt.Errorf("%v", errors)
+	}
+	return nil
 }
