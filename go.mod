@@ -14,8 +14,6 @@ require (
 	github.com/insomniacslk/dhcp v0.0.0-20200210095418-45e5f320b2f0
 	github.com/jpillora/backoff v1.0.0
 	github.com/krolaw/dhcp4 v0.0.0-20190909130307-a50d88189771
-	github.com/mdlayher/genetlink v1.0.0
-	github.com/mdlayher/netlink v1.1.0
 	github.com/mdlayher/raw v0.0.0-20191009151244-50f2db8cc065
 	github.com/miekg/dns v1.1.27
 	github.com/prometheus/client_golang v1.4.1
