@@ -24,9 +24,9 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/mdlayher/genetlink"
-	"github.com/rtr7/router7/internal/wg"
 	"github.com/vishvananda/netlink"
+	"golang.zx2c4.com/wireguard/wgctrl"
+	"golang.zx2c4.com/wireguard/wgctrl/wgtypes"
 )
 
 type wireguardPeer struct {
@@ -79,11 +79,11 @@ func applyWireGuard(dir string) error {
 	}
 	defer h.Delete()
 
-	conn, err := genetlink.Dial(nil)
+	cl, err := wgctrl.New()
 	if err != nil {
-		return fmt.Errorf("genetlink.Dial: %v", err)
+		return err
 	}
-	defer conn.Close()
+	defer cl.Close()
 
 	for _, iface := range cfg.Interfaces {
 		l := &wgLink{iface.Name}
@@ -93,38 +93,55 @@ func applyWireGuard(dir string) error {
 			}
 		}
 
-		var peers []*wg.Peer
+		var peers []wgtypes.PeerConfig
 		for _, p := range iface.Peers {
-			var ips []*net.IPNet
+			var ips []net.IPNet
 			for _, ip := range p.AllowedIPs {
 				_, ipnet, err := net.ParseCIDR(ip)
 				if err != nil {
 					return err
 				}
 
-				ips = append(ips, ipnet)
+				ips = append(ips, *ipnet)
 			}
 			b, err := base64.StdEncoding.DecodeString(p.PublicKey)
 			if err != nil {
 				return err
 			}
-			peers = append(peers, &wg.Peer{
-				PublicKey:  b,
-				Endpoint:   p.Endpoint,
-				AllowedIPs: ips,
+			publicKey, err := wgtypes.NewKey(b)
+			if err != nil {
+				return err
+			}
+			var addr *net.UDPAddr
+			if p.Endpoint != "" {
+				addr, err = net.ResolveUDPAddr("udp", p.Endpoint)
+				if err != nil {
+					return err
+				}
+			}
+			peers = append(peers, wgtypes.PeerConfig{
+				PublicKey:         publicKey,
+				Endpoint:          addr,
+				ReplaceAllowedIPs: true, // replace instead of appending
+				AllowedIPs:        ips,
 			})
 		}
 		b, err := base64.StdEncoding.DecodeString(iface.PrivateKey)
 		if err != nil {
 			return err
 		}
-		d := &wg.Device{
-			Ifname:     iface.Name,
-			PrivateKey: b,
-			ListenPort: uint16(iface.Port),
-			Peers:      peers,
+		privateKey, err := wgtypes.NewKey(b)
+		if err != nil {
+			return err
 		}
-		if err := wg.SetDevice(conn, d); err != nil {
+		err = cl.ConfigureDevice(iface.Name, wgtypes.Config{
+			PrivateKey:   &privateKey,
+			ListenPort:   &iface.Port,
+			ReplacePeers: true, // replace instead of appending
+			// Peers specifies a list of peer configurations to apply to a device.
+			Peers: peers,
+		})
+		if err != nil {
 			return err
 		}
 	}

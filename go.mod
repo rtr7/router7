@@ -28,4 +28,5 @@ require (
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	golang.org/x/sys v0.0.0-20200212091648-12a6c2dcc1e4
 	golang.org/x/time v0.0.0-20191024005414-555d28b269f0
+	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200205215550-e35592f146e4
 )
