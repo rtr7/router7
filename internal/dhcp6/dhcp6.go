@@ -277,6 +277,7 @@ func (c *Client) ObtainOrRenew() bool {
 		return true
 	}
 	var newCfg Config
+	// just triggering the build, remove me
 	for _, opt := range reply.Options {
 		switch o := opt.(type) {
 		case *dhcpv6.OptIAForPrefixDelegation:
