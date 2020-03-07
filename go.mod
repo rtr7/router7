@@ -11,7 +11,7 @@ require (
 	github.com/google/gopacket v1.1.17
 	github.com/google/nftables v0.0.0-20200210101420-1c56a1906fbf
 	github.com/google/renameio v0.1.0
-	github.com/insomniacslk/dhcp v0.0.0-20200210095418-45e5f320b2f0
+	github.com/insomniacslk/dhcp v0.0.0-20200306230118-99cbb09fb7b9
 	github.com/jpillora/backoff v1.0.0
 	github.com/krolaw/dhcp4 v0.0.0-20190909130307-a50d88189771
 	github.com/mdlayher/raw v0.0.0-20191009151244-50f2db8cc065

@@ -277,26 +277,21 @@ func (c *Client) ObtainOrRenew() bool {
 		return true
 	}
 	var newCfg Config
-	for _, opt := range reply.Options {
-		switch o := opt.(type) {
-		case *dhcpv6.OptIAForPrefixDelegation:
-			t1 := c.timeNow().Add(o.T1)
-			if t1.Before(newCfg.RenewAfter) || newCfg.RenewAfter.IsZero() {
-				newCfg.RenewAfter = t1
-			}
-			if sopt := o.GetOneOption(dhcpv6.OptionIAPrefix); sopt != nil {
-				prefix := sopt.(*dhcpv6.OptIAPrefix)
-				newCfg.Prefixes = append(newCfg.Prefixes, net.IPNet{
-					IP:   prefix.IPv6Prefix(),
-					Mask: net.CIDRMask(int(prefix.PrefixLength()), 128),
-				})
-			}
-
-		case *dhcpv6.OptDNSRecursiveNameServer:
-			for _, ns := range o.NameServers {
-				newCfg.DNS = append(newCfg.DNS, ns.String())
-			}
+	for _, o := range reply.Options.IAPD() {
+		t1 := c.timeNow().Add(o.T1)
+		if t1.Before(newCfg.RenewAfter) || newCfg.RenewAfter.IsZero() {
+			newCfg.RenewAfter = t1
 		}
+		if sopt := o.GetOneOption(dhcpv6.OptionIAPrefix); sopt != nil {
+			prefix := sopt.(*dhcpv6.OptIAPrefix)
+			newCfg.Prefixes = append(newCfg.Prefixes, net.IPNet{
+				IP:   prefix.IPv6Prefix(),
+				Mask: net.CIDRMask(int(prefix.PrefixLength()), 128),
+			})
+		}
+	}
+	for _, dns := range reply.Options.DNS() {
+		newCfg.DNS = append(newCfg.DNS, dns.String())
 	}
 	c.cfg = newCfg
 	return true
