@@ -24,7 +24,7 @@ type tcp4 struct {
 }
 
 func (d *tcp4) String() string {
-	return "tcp4/" + d.addr
+	return "tcp4: " + d.addr
 }
 
 func (d *tcp4) Then(t Node) Node {
@@ -57,7 +57,7 @@ type tcp6 struct {
 }
 
 func (d *tcp6) String() string {
-	return "tcp6/" + d.addr
+	return "tcp6: " + d.addr
 }
 
 func (d *tcp6) Then(t Node) Node {

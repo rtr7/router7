@@ -34,7 +34,7 @@ type ping4gw struct {
 }
 
 func (d *ping4gw) String() string {
-	return "ping4/<default-gateway>"
+	return "ping4: $default-gateway"
 }
 
 func (d *ping4gw) Then(t Node) Node {
@@ -93,7 +93,7 @@ type ping4 struct {
 }
 
 func (d *ping4) String() string {
-	return "ping4/" + d.addr
+	return "ping4: " + d.addr
 }
 
 func (d *ping4) Then(t Node) Node {
@@ -134,7 +134,7 @@ type ping6gw struct {
 }
 
 func (d *ping6gw) String() string {
-	return "ping6gw/<default-gateway>"
+	return "ping6gw: $default-gateway"
 }
 
 func (d *ping6gw) Then(t Node) Node {
@@ -198,9 +198,9 @@ type ping6 struct {
 
 func (d *ping6) String() string {
 	if d.ifname == "" {
-		return "ping6/" + d.addr
+		return "ping6: " + d.addr
 	}
-	return fmt.Sprintf("ping6/%s→%s", d.ifname, d.addr)
+	return fmt.Sprintf("ping6: %s → %s", d.ifname, d.addr)
 }
 
 func (d *ping6) Then(t Node) Node {

@@ -26,6 +26,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"sync"
 	"syscall"
 
@@ -49,14 +50,18 @@ func updateListeners() error {
 	return nil
 }
 
-func dump(w io.Writer, re *diag.EvalResult) {
+func dump(indent int, w io.Writer, re *diag.EvalResult) {
 	symbol := "✔"
 	if re.Error {
 		symbol = "✘"
 	}
-	fmt.Fprintf(w, "<li>%s %s: %s<ul>", symbol, html.EscapeString(re.Name), html.EscapeString(re.Status))
+	fmt.Fprintf(w, "<li>\n%s%s %s: %s<ul>",
+		strings.Repeat("  ", indent),
+		symbol,
+		html.EscapeString(re.Name),
+		html.EscapeString(re.Status))
 	for _, ch := range re.Children {
-		dump(w, ch)
+		dump(indent+1, w, ch)
 	}
 	fmt.Fprintf(w, "</ul></li>")
 }
@@ -96,7 +101,7 @@ func logic() error {
 		re := m.Evaluate()
 		mu.Unlock()
 		fmt.Fprintf(w, `<!DOCTYPE html><style type="text/css">ul { list-style-type: none; }</style><ul>`)
-		dump(w, re)
+		dump(0, w, re)
 	})
 	http.HandleFunc("/health.json", func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
