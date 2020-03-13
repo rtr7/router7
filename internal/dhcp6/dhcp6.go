@@ -234,12 +234,7 @@ func (c *Client) solicit(solicit *dhcpv6.Message) (*dhcpv6.Message, *dhcpv6.Mess
 		c.transactionIDs = c.transactionIDs[1:]
 		solicit.TransactionID = id
 	}
-	iapd := []byte{0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00}
-	opt, err := dhcpv6.ParseOptIAForPrefixDelegation(iapd)
-	if err != nil {
-		return nil, nil, err
-	}
-	solicit.AddOption(opt)
+	solicit.AddOption(&dhcpv6.OptIAPD{IaId: [4]byte{0, 0, 0, 1}})
 	advertise, err := c.sendReceive(solicit, dhcpv6.MessageTypeNone)
 	return solicit, advertise, err
 }
@@ -249,7 +244,7 @@ func (c *Client) request(advertise *dhcpv6.Message) (*dhcpv6.Message, *dhcpv6.Me
 	if err != nil {
 		return nil, nil, err
 	}
-	if iapd := advertise.GetOneOption(dhcpv6.OptionIAPD); iapd != nil {
+	if iapd := advertise.Options.OneIAPD(); iapd != nil {
 		request.AddOption(iapd)
 	}
 
@@ -277,17 +272,13 @@ func (c *Client) ObtainOrRenew() bool {
 		return true
 	}
 	var newCfg Config
-	for _, o := range reply.Options.IAPD() {
-		t1 := c.timeNow().Add(o.T1)
+	for _, iapd := range reply.Options.IAPD() {
+		t1 := c.timeNow().Add(iapd.T1)
 		if t1.Before(newCfg.RenewAfter) || newCfg.RenewAfter.IsZero() {
 			newCfg.RenewAfter = t1
 		}
-		if sopt := o.GetOneOption(dhcpv6.OptionIAPrefix); sopt != nil {
-			prefix := sopt.(*dhcpv6.OptIAPrefix)
-			newCfg.Prefixes = append(newCfg.Prefixes, net.IPNet{
-				IP:   prefix.IPv6Prefix(),
-				Mask: net.CIDRMask(int(prefix.PrefixLength()), 128),
-			})
+		for _, prefix := range iapd.Options.Prefixes() {
+			newCfg.Prefixes = append(newCfg.Prefixes, *prefix.Prefix)
 		}
 	}
 	for _, dns := range reply.Options.DNS() {
