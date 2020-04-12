@@ -19,6 +19,7 @@ import (
 	"log"
 	"math/rand"
 	"net"
+	"sync"
 	"syscall"
 	"time"
 
@@ -49,8 +50,6 @@ type Handler struct {
 	leaseRange  int    // number of IP addresses to hand out
 	LeasePeriod time.Duration
 	options     dhcp4.Options
-	leasesHW    map[string]int // points into leasesIP
-	leasesIP    map[int]*Lease
 	rawConn     net.PacketConn
 	iface       *net.Interface
 
@@ -58,6 +57,10 @@ type Handler struct {
 
 	// Leases is called whenever a new lease is handed out
 	Leases func([]*Lease, *Lease)
+
+	leasesMu sync.Mutex
+	leasesHW map[string]int // points into leasesIP
+	leasesIP map[int]*Lease
 }
 
 func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.PacketConn) (*Handler, error) {
@@ -105,6 +108,8 @@ func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.Pac
 // loaded from persistent storage. There is no locking, so SetLeases must be
 // called before Serve.
 func (h *Handler) SetLeases(leases []*Lease) {
+	h.leasesMu.Lock()
+	defer h.leasesMu.Unlock()
 	h.leasesHW = make(map[string]int)
 	h.leasesIP = make(map[int]*Lease)
 	for _, l := range leases {
@@ -113,7 +118,30 @@ func (h *Handler) SetLeases(leases []*Lease) {
 	}
 }
 
+func (h *Handler) callLeasesLocked(lease *Lease) {
+	if h.Leases == nil {
+		return
+	}
+	var leases []*Lease
+	for _, l := range h.leasesIP {
+		leases = append(leases, l)
+	}
+	h.Leases(leases, lease)
+}
+
+func (h *Handler) SetHostname(hwaddr, hostname string) {
+	h.leasesMu.Lock()
+	defer h.leasesMu.Unlock()
+	leaseNum := h.leasesHW[hwaddr]
+	lease := h.leasesIP[leaseNum]
+	lease.Hostname = hostname
+	lease.HostnameOverride = hostname
+	h.callLeasesLocked(lease)
+}
+
 func (h *Handler) findLease() int {
+	h.leasesMu.Lock()
+	defer h.leasesMu.Unlock()
 	now := h.timeNow()
 	if len(h.leasesIP) < h.leaseRange {
 		// TODO: hash the hwaddr like dnsmasq
@@ -140,6 +168,8 @@ func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
 		return -1
 	}
 
+	h.leasesMu.Lock()
+	defer h.leasesMu.Unlock()
 	l, ok := h.leasesIP[leaseNum]
 	if !ok {
 		return leaseNum // lease available
@@ -156,6 +186,7 @@ func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
 	return -1 // lease unavailable
 }
 
+// ServeDHCP is always called from the same goroutine, so no locking is required.
 func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options dhcp4.Options) dhcp4.Packet {
 	reply := h.serveDHCP(p, msgType, options)
 	if reply == nil {
@@ -205,6 +236,8 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 }
 
 func (h *Handler) leaseHW(hwAddr string) (*Lease, bool) {
+	h.leasesMu.Lock()
+	defer h.leasesMu.Unlock()
 	num, ok := h.leasesHW[hwAddr]
 	if !ok {
 		return nil, false
@@ -284,18 +317,16 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			}
 
 			// Release any old leases for this client
+			h.leasesMu.Lock()
 			delete(h.leasesIP, l.Num)
+			h.leasesMu.Unlock()
 		}
 
+		h.leasesMu.Lock()
+		defer h.leasesMu.Unlock()
 		h.leasesIP[leaseNum] = lease
 		h.leasesHW[lease.HardwareAddr] = leaseNum
-		if h.Leases != nil {
-			var leases []*Lease
-			for _, l := range h.leasesIP {
-				leases = append(leases, l)
-			}
-			h.Leases(leases, lease)
-		}
+		h.callLeasesLocked(lease)
 		return dhcp4.ReplyPacket(p, dhcp4.ACK, h.serverIP, reqIP, h.LeasePeriod,
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
 	}

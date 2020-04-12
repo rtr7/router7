@@ -137,6 +137,9 @@ span.hostname-override {
 tr:nth-child(even) {
   background: #eee;
 }
+form {
+  display: inline;
+}
 </style>
 </head>
 <body>
@@ -152,7 +155,10 @@ tr:nth-child(even) {
 <tr>
 <td class="ipaddr">{{$l.Addr}}</td>
 <td>
-{{$l.Hostname}}
+<form action="/sethostname" method="post">
+<input type="hidden" name="hardwareaddr" value="{{$l.HardwareAddr}}">
+<input type="text" name="hostname" value="{{$l.Hostname}}">
+</form>
 {{ if (ne $l.HostnameOverride "") }}
 <span class="hostname-override">!</span>
 {{ end }}
@@ -257,6 +263,25 @@ func newSrv(permDir string) (*srv, error) {
 	if err := loadLeases(handler, filepath.Join(permDir, "dhcp4d/leases.json")); err != nil {
 		return nil, err
 	}
+
+	http.HandleFunc("/sethostname", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "want POST", http.StatusMethodNotAllowed)
+			return
+		}
+		hwaddr := r.FormValue("hardwareaddr")
+		if hwaddr == "" {
+			http.Error(w, "missing hardwareaddr parameter", http.StatusBadRequest)
+			return
+		}
+		hostname := r.FormValue("hostname")
+		if hostname == "" {
+			http.Error(w, "missing hostname parameter", http.StatusBadRequest)
+			return
+		}
+		handler.SetHostname(hwaddr, hostname)
+		http.Redirect(w, r, "/", http.StatusFound)
+	})
 
 	http.HandleFunc("/lease/", func(w http.ResponseWriter, r *http.Request) {
 		hostname := strings.TrimPrefix(r.URL.Path, "/lease/")
