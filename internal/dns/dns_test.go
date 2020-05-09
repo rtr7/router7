@@ -15,7 +15,6 @@
 package dns
 
 import (
-	"bytes"
 	"fmt"
 	"io/ioutil"
 	"net"
@@ -412,7 +411,7 @@ func TestLocalhost(t *testing.T) {
 		if _, ok := a.(*dns.AAAA); !ok {
 			t.Fatalf("unexpected response type: got %T, want dns.A", a)
 		}
-		if got, want := a.(*dns.AAAA).AAAA, (net.ParseIP("::1")); !bytes.Equal(got, want) {
+		if got, want := a.(*dns.AAAA).AAAA, (net.ParseIP("::1")); !got.Equal(want) {
 			t.Fatalf("unexpected response IP: got %v, want %v", got, want)
 		}
 	})

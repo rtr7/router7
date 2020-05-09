@@ -327,7 +327,7 @@ func isLocalInAddrArpa(q string) bool {
 	return local
 }
 
-var sentinelEmpty = errors.New("no answers")
+var errEmpty = errors.New("no answers")
 
 func (s *Server) resolve(q dns.Question) (rr dns.RR, err error) {
 	if q.Qclass != dns.ClassINET {
@@ -350,7 +350,7 @@ func (s *Server) resolve(q dns.Question) (rr dns.RR, err error) {
 			if q.Qtype == dns.TypeA {
 				return dns.NewRR(q.Name + " 3600 IN A " + host)
 			}
-			return nil, sentinelEmpty
+			return nil, errEmpty
 		}
 	}
 	if q.Qtype == dns.TypePTR {
@@ -373,7 +373,7 @@ func (s *Server) handleInternal(w dns.ResponseWriter, r *dns.Msg) {
 	}
 	rr, err := s.resolve(r.Question[0])
 	if err != nil {
-		if err == sentinelEmpty {
+		if err == errEmpty {
 			m := new(dns.Msg)
 			m.SetReply(r)
 			w.WriteMsg(m)
@@ -457,7 +457,7 @@ func (s *Server) resolveSubname(hostname string, q dns.Question) (dns.RR, error)
 			if q.Qtype == dns.TypeA {
 				return dns.NewRR(q.Name + " 3600 IN A " + host)
 			}
-			return nil, sentinelEmpty
+			return nil, errEmpty
 		}
 
 		if ip, ok := s.subname(hostname, name); ok {
@@ -467,7 +467,7 @@ func (s *Server) resolveSubname(hostname string, q dns.Question) (dns.RR, error)
 			if q.Qtype == dns.TypeAAAA && ip.To4() == nil {
 				return dns.NewRR(q.Name + " 3600 IN AAAA " + ip.String())
 			}
-			return nil, sentinelEmpty
+			return nil, errEmpty
 		}
 	}
 	return nil, nil
@@ -481,7 +481,7 @@ func (s *Server) subnameHandler(hostname string) func(w dns.ResponseWriter, r *d
 
 		rr, err := s.resolveSubname(hostname, r.Question[0])
 		if err != nil {
-			if err == sentinelEmpty {
+			if err == errEmpty {
 				m := new(dns.Msg)
 				m.SetReply(r)
 				w.WriteMsg(m)
