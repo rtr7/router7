@@ -22,10 +22,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
+	"github.com/mdlayher/ndp"
 
-	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv6"
 )
 
@@ -197,38 +196,14 @@ func (s *Server) sendAdvertisement(addr net.Addr) error {
 		return nil // nothing to do
 	}
 	if addr == nil {
-		addr = &net.IPAddr{net.IPv6linklocalallnodes, s.iface.Name}
-	}
-	// TODO: cache the packet
-	msgbody := []byte{
-		0x40,       // hop limit: 64
-		0x80,       // flags: managed address configuration
-		0x07, 0x08, // router lifetime (s): 1800
-		0x00, 0x00, 0x00, 0x00, // reachable time (ms): 0
-		0x00, 0x00, 0x00, 0x00, // retrans time (ms): 0
-	}
-
-	options := layers.ICMPv6Options{
-		(sourceLinkLayerAddress{address: s.iface.HardwareAddr}).Marshal(),
-		(mtu{mtu: uint32(s.iface.MTU)}).Marshal(),
-	}
-	for _, prefix := range s.prefixes {
-		ones, _ := prefix.Mask.Size()
-		// Use the first /64 subnet within larger prefixes
-		if ones < 64 {
-			ones = 64
+		addr = &net.IPAddr{
+			IP:   net.IPv6linklocalallnodes,
+			Zone: s.iface.Name,
 		}
-
-		var net [16]byte
-		copy(net[:], prefix.IP)
-		options = append(options, (prefixInfo{
-			prefixLength:      byte(ones),
-			flags:             0xc0, // TODO
-			validLifetime:     7200, // seconds
-			preferredLifetime: 1800, // seconds
-			prefix:            net,
-		}).Marshal())
 	}
+
+	var options []ndp.Option
+
 	if len(s.prefixes) > 0 {
 		addrs, err := s.iface.Addrs()
 		if err != nil {
@@ -246,25 +221,45 @@ func (s *Server) sendAdvertisement(addr net.Addr) error {
 			}
 		}
 		if !linkLocal.Equal(net.IPv6zero) {
-			options = append(options, (rdnss{
-				lifetime: 1800, // seconds
-				server:   linkLocal,
-			}).Marshal())
+			options = append(options, &ndp.RecursiveDNSServer{
+				Lifetime: 30 * time.Minute,
+				Servers:  []net.IP{linkLocal},
+			})
 		}
 	}
 
-	buf := gopacket.NewSerializeBuffer()
-	if err := options.SerializeTo(buf, gopacket.SerializeOptions{FixLengths: true}); err != nil {
-		return err
-	}
-	msgbody = append(msgbody, buf.Bytes()...)
+	for _, prefix := range s.prefixes {
+		ones, _ := prefix.Mask.Size()
+		// Use the first /64 subnet within larger prefixes
+		if ones < 64 {
+			ones = 64
+		}
 
-	msg := &icmp.Message{
-		Type:     ipv6.ICMPTypeRouterAdvertisement,
-		Code:     0,
-		Checksum: 0, // calculated by the kernel
-		Body:     &icmp.DefaultMessageBody{msgbody}}
-	mb, err := msg.Marshal(nil)
+		options = append(options, &ndp.PrefixInformation{
+			PrefixLength:                   uint8(ones),
+			OnLink:                         true,
+			AutonomousAddressConfiguration: true,
+			ValidLifetime:                  2 * time.Hour,
+			PreferredLifetime:              30 * time.Minute,
+			Prefix:                         prefix.IP,
+		})
+	}
+
+	options = append(options,
+		ndp.NewMTU(uint32(s.iface.MTU)),
+		&ndp.LinkLayerAddress{
+			Direction: ndp.Source,
+			Addr:      s.iface.HardwareAddr,
+		},
+	)
+
+	ra := &ndp.RouterAdvertisement{
+		CurrentHopLimit: 64,
+		RouterLifetime:  30 * time.Minute,
+		Options:         options,
+	}
+
+	mb, err := ndp.MarshalMessage(ra)
 	if err != nil {
 		return err
 	}

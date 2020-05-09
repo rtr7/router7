@@ -22,6 +22,7 @@ require (
 	github.com/insomniacslk/dhcp v0.0.0-20200420235442-ed3125c2efe7
 	github.com/jpillora/backoff v1.0.0
 	github.com/krolaw/dhcp4 v0.0.0-20190909130307-a50d88189771
+	github.com/mdlayher/ndp v0.0.0-20200509194142-8a50b5ef8b52
 	github.com/mdlayher/raw v0.0.0-20191009151244-50f2db8cc065
 	github.com/miekg/dns v1.1.29
 	github.com/prometheus/client_golang v1.6.0
@@ -35,8 +36,8 @@ require (
 	github.com/vishvananda/netlink v1.1.0
 	golang.org/x/crypto v0.0.0-20200429183012-4b2356b1ed79
 	golang.org/x/net v0.0.0-20200506145744-7e3656a0809f
-	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
-	golang.org/x/sys v0.0.0-20200501145240-bc7a7d42d5c3
+	golang.org/x/sync v0.0.0-20200317015054-43a5402ce75a
+	golang.org/x/sys v0.0.0-20200509044756-6aff5f38e54f
 	golang.org/x/time v0.0.0-20200416051211-89c76fbcd5d1
 	golang.zx2c4.com/wireguard v0.0.20200320 // indirect
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20200324154536-ceff61240acf

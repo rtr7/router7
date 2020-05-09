@@ -98,7 +98,7 @@ func TestRouterAdvertisement(t *testing.T) {
 	want := `Soliciting ff02::2 (ff02::2) on veth2b...
 
 Hop limit                 :           64 (      0x40)
-Stateful address conf.    :          Yes
+Stateful address conf.    :           No
 Stateful other conf.      :           No
 Mobile home agent         :           No
 Router preference         :       medium
