@@ -30,8 +30,6 @@ require (
 	github.com/rtr7/dyndns v0.0.0-20190106135032-c057db8a5daf // indirect
 	github.com/rtr7/kernel v0.0.0-20200506151338-66f9d4444856 // indirect
 	github.com/sergi/go-diff v1.1.0 // indirect
-	github.com/stapelberg/dyndns v0.0.0-00010101000000-000000000000 // indirect
-	github.com/stapelberg/prober7 v0.0.0-00010101000000-000000000000 // indirect
 	github.com/stapelberg/zkj-nas-tools v0.0.0-20200309084414-3f5eb432164d // indirect
 	github.com/u-root/u-root v6.0.0+incompatible // indirect
 	github.com/vishvananda/netlink v1.1.0

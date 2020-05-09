@@ -2,11 +2,9 @@ SUDO=GOPATH=$(shell go env GOPATH) sudo --preserve-env=GOPATH
 
 PKGS := github.com/rtr7/router7/cmd/... \
 	github.com/gokrazy/breakglass \
-	github.com/stapelberg/dyndns \
 	github.com/gokrazy/timestamps \
 	github.com/stapelberg/zkj-nas-tools/wolgw \
-	github.com/gokrazy/gdns \
-	github.com/stapelberg/prober7/cmd/probe
+	github.com/gokrazy/gdns
 
 image:
 ifndef DIR
