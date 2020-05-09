@@ -100,7 +100,7 @@ func (c *Client) ObtainOrRenew() bool {
 			c.connection = conn
 		}
 		if c.connection == nil && c.Interface == nil {
-			onceErr = fmt.Errorf("Interface is nil")
+			onceErr = fmt.Errorf("c.Interface is nil")
 			return
 		}
 		if c.hardwareAddr == nil && c.HWAddr != nil {

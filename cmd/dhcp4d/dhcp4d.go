@@ -389,7 +389,7 @@ func newSrv(permDir string) (*srv, error) {
 		if err := json.Indent(&out, b, "", "\t"); err == nil {
 			b = out.Bytes()
 		}
-		if err := renameio.WriteFile(filepath.Join(permDir, "dhcp4d/leases.json"), out.Bytes(), 0644); err != nil {
+		if err := renameio.WriteFile(filepath.Join(permDir, "dhcp4d/leases.json"), b, 0644); err != nil {
 			errs <- err
 		}
 		updateNonExpired(leases)

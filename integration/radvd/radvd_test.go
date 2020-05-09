@@ -15,6 +15,7 @@
 package integration_test
 
 import (
+	"fmt"
 	"io/ioutil"
 	"net"
 	"os"
@@ -80,7 +81,7 @@ func TestRouterAdvertisement(t *testing.T) {
 	}
 	go func() {
 		if err := srv.Serve("veth2a", conn); err != nil {
-			t.Fatal(err)
+			panic(fmt.Sprintf("failed to serve router advertisements: %v", err))
 		}
 	}()
 	//time.Sleep(5 * time.Second)

@@ -168,7 +168,7 @@ const maxUDPReceivedPacketSize = 8192 // arbitrary size. Theoretically could be 
 
 func (c *Client) sendReceive(packet *dhcpv6.Message, expectedType dhcpv6.MessageType) (*dhcpv6.Message, error) {
 	if packet == nil {
-		return nil, fmt.Errorf("Packet to send cannot be nil")
+		return nil, fmt.Errorf("packet to send cannot be nil")
 	}
 	if expectedType == dhcpv6.MessageTypeNone {
 		// infer the expected type from the packet being sent

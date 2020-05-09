@@ -116,7 +116,7 @@ func Run(t *testing.T, iface, ns string) *Process {
 		case <-p.done:
 			return // test done, any errors are from our Kill()
 		default:
-			t.Fatalf("dnsmasq exited prematurely: %v", err)
+			panic(fmt.Sprintf("dnsmasq exited prematurely: %v", err))
 		}
 	}()
 
