@@ -15,7 +15,6 @@
 package dhcp4d
 
 import (
-	"bytes"
 	"io/ioutil"
 	"net"
 	"os"
@@ -112,7 +111,7 @@ func TestLease(t *testing.T) {
 			t.Fatalf("unexpected number of leases: got %d, want %d", got, want)
 		}
 		l := leases[0]
-		if got, want := l.Addr, addr; !bytes.Equal(got, want) {
+		if got, want := l.Addr, addr; !got.Equal(want) {
 			t.Fatalf("unexpected lease.Addr: got %v, want %v", got, want)
 		}
 		if got, want := l.HardwareAddr, hardwareAddr.String(); got != want {
@@ -155,7 +154,7 @@ func TestPreferredAddress(t *testing.T) {
 	t.Run("no requested IP", func(t *testing.T) {
 		p := request(net.IPv4zero, hardwareAddr)
 		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
-		if got, want := resp.YIAddr().To4(), addr.To4(); bytes.Equal(got, want) {
+		if got, want := resp.YIAddr().To4(), addr.To4(); got.Equal(want) {
 			t.Errorf("DHCPOFFER for wrong IP: got %v, want anything else", got)
 		}
 	})
@@ -163,7 +162,7 @@ func TestPreferredAddress(t *testing.T) {
 	t.Run("requested CIAddr", func(t *testing.T) {
 		p := request(addr, hardwareAddr)
 		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
-		if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+		if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
 			t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
 		}
 	})
@@ -188,7 +187,7 @@ func TestPreferredAddress(t *testing.T) {
 			},
 		)
 		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
-		if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+		if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
 			t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
 		}
 	})
@@ -227,7 +226,7 @@ func TestPreviousLease(t *testing.T) {
 
 	p := request(addr1, hardwareAddr1)
 	resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-	if got, want := resp.YIAddr().To4(), addr1.To4(); !bytes.Equal(got, want) {
+	if got, want := resp.YIAddr().To4(), addr1.To4(); !got.Equal(want) {
 		t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
 	}
 
@@ -239,21 +238,21 @@ func TestPreviousLease(t *testing.T) {
 
 	p = discover(net.IPv4zero, hardwareAddr1)
 	resp = handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
-	if got, want := resp.YIAddr().To4(), addr1.To4(); !bytes.Equal(got, want) {
+	if got, want := resp.YIAddr().To4(), addr1.To4(); !got.Equal(want) {
 		t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
 	}
 
 	// Free addr1 by requesting addr2
 	p = request(addr2, hardwareAddr1)
 	resp = handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-	if got, want := resp.YIAddr().To4(), addr2.To4(); !bytes.Equal(got, want) {
+	if got, want := resp.YIAddr().To4(), addr2.To4(); !got.Equal(want) {
 		t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
 	}
 
 	// Verify addr1 is now available to other clients
 	p = request(addr1, hardwareAddr2)
 	resp = handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-	if got, want := resp.YIAddr().To4(), addr1.To4(); !bytes.Equal(got, want) {
+	if got, want := resp.YIAddr().To4(), addr1.To4(); !got.Equal(want) {
 		t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
 	}
 }
@@ -279,7 +278,7 @@ func TestPermanentLease(t *testing.T) {
 
 	p := request(addr, hardwareAddr)
 	resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-	if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+	if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
 		t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
 	}
 
@@ -312,7 +311,7 @@ func TestExpiration(t *testing.T) {
 			hardwareAddr[len(hardwareAddr)-1] = addr[len(addr)-1]
 			p := request(addr, hardwareAddr)
 			resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-			if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+			if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
 				t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
 			}
 		}
@@ -325,7 +324,7 @@ func TestExpiration(t *testing.T) {
 			hardwareAddr[len(hardwareAddr)-1] = addr[len(addr)-1]
 			p := request(addr, hardwareAddr)
 			resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-			if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+			if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
 				t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
 			}
 		}
@@ -359,7 +358,7 @@ func TestExpiration(t *testing.T) {
 			addr[len(addr)-1] = byte(1 + (i % 254)) // avoid .0 (net) and .255 (broadcast)
 			p := request(addr, hardwareAddr)
 			resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
-			if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+			if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
 				t.Errorf("DHCPREQUEST resulted in wrong IP: got %v, want %v", got, want)
 			}
 		}
@@ -408,7 +407,7 @@ func TestRequestExpired(t *testing.T) {
 	t.Run("mbp requests any", func(t *testing.T) {
 		p := request(addr, hardwareAddr["mbp"])
 		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
-		if got, want := resp.YIAddr().To4(), addr.To4(); bytes.Equal(got, want) {
+		if got, want := resp.YIAddr().To4(), addr.To4(); got.Equal(want) {
 			t.Errorf("DHCPOFFER for wrong IP: got offered %v (in use!)", got)
 		}
 	})
@@ -452,7 +451,7 @@ func TestPersistentStorage(t *testing.T) {
 
 	p := request(net.IPv4zero, hardwareAddr)
 	resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
-	if got, want := resp.YIAddr().To4(), addr.To4(); !bytes.Equal(got, want) {
+	if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
 		t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
 	}
 }
