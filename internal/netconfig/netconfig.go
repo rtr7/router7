@@ -238,6 +238,9 @@ func applyInterfaces(dir, root string) error {
 		byName[details.Name] = details
 	}
 	links, err := netlink.LinkList()
+	if err != nil {
+		return err
+	}
 	for _, l := range links {
 		attr := l.Attrs()
 		// TODO: prefix log line with details about the interface.
