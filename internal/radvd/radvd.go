@@ -16,13 +16,11 @@
 package radvd
 
 import (
-	"encoding/binary"
 	"log"
 	"net"
 	"sync"
 	"time"
 
-	"github.com/google/gopacket/layers"
 	"github.com/mdlayher/ndp"
 
 	"golang.org/x/net/ipv6"
@@ -116,69 +114,6 @@ func (s *Server) ListenAndServe(ifname string) error {
 		return err
 	}
 	return s.Serve(ifname, conn)
-}
-
-type sourceLinkLayerAddress struct {
-	address net.HardwareAddr
-}
-
-func (o sourceLinkLayerAddress) Marshal() layers.ICMPv6Option {
-	return layers.ICMPv6Option{
-		Type: layers.ICMPv6OptSourceAddress,
-		Data: o.address,
-	}
-}
-
-type mtu struct {
-	mtu uint32
-}
-
-func (o mtu) Marshal() layers.ICMPv6Option {
-	buf := make([]byte, 6)
-	// First 2 bytes are reserved
-	binary.BigEndian.PutUint32(buf[2:], o.mtu)
-	return layers.ICMPv6Option{
-		Type: layers.ICMPv6OptMTU,
-		Data: buf,
-	}
-}
-
-type prefixInfo struct {
-	prefixLength      byte
-	flags             byte   // TODO: enum for values
-	validLifetime     uint32 // seconds
-	preferredLifetime uint32 // seconds
-	prefix            [16]byte
-}
-
-func (o prefixInfo) Marshal() layers.ICMPv6Option {
-	buf := make([]byte, 30)
-	buf[0] = o.prefixLength
-	buf[1] = o.flags
-	binary.BigEndian.PutUint32(buf[2:], o.validLifetime)
-	binary.BigEndian.PutUint32(buf[6:], o.preferredLifetime)
-	// 4 bytes reserved
-	copy(buf[14:], o.prefix[:])
-	return layers.ICMPv6Option{
-		Type: layers.ICMPv6OptPrefixInfo,
-		Data: buf,
-	}
-}
-
-type rdnss struct {
-	lifetime uint32 // seconds
-	server   []byte
-}
-
-func (o rdnss) Marshal() layers.ICMPv6Option {
-	buf := make([]byte, 22)
-	// 2 bytes reserved
-	binary.BigEndian.PutUint32(buf[2:], o.lifetime)
-	copy(buf[6:], o.server[:])
-	return layers.ICMPv6Option{
-		Type: 25, // TODO: Recursive DNS Server
-		Data: buf,
-	}
 }
 
 var ipv6LinkLocal = func(cidr string) *net.IPNet {
