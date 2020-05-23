@@ -22,6 +22,8 @@ require (
 	github.com/insomniacslk/dhcp v0.0.0-20200420235442-ed3125c2efe7
 	github.com/jpillora/backoff v1.0.0
 	github.com/krolaw/dhcp4 v0.0.0-20190909130307-a50d88189771
+	github.com/libdns/cloudflare v0.0.0-20200506154110-16482ae4e806
+	github.com/libdns/libdns v0.0.0-20200501023120-186724ffc821
 	github.com/mdlayher/ndp v0.0.0-20200509194142-8a50b5ef8b52
 	github.com/mdlayher/raw v0.0.0-20191009151244-50f2db8cc065
 	github.com/miekg/dns v1.1.29
