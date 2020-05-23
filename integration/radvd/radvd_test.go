@@ -114,6 +114,8 @@ Retransmit time           :  unspecified (0x00000000)
   Autonomous address conf.:          Yes
   Valid time              :         7200 (0x00001c20) seconds
   Pref. time              :         1800 (0x00000708) seconds
+ DNS search list          : lan 
+  DNS search list lifetime:         1200 (0x000004b0) seconds
  MTU                      :         1500 bytes (valid)
  Source link-layer address: 02:73:53:00:CA:FE
  from fe80::73:53ff:fe00:cafe

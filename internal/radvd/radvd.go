@@ -181,6 +181,12 @@ func (s *Server) sendAdvertisement(addr net.Addr) error {
 	}
 
 	options = append(options,
+		&ndp.DNSSearchList{
+			// TODO: audit all lifetimes and express them in relation to each other
+			Lifetime: 20 * time.Minute,
+			// TODO: single source of truth for search domain name
+			DomainNames: []string{"lan"},
+		},
 		ndp.NewMTU(uint32(s.iface.MTU)),
 		&ndp.LinkLayerAddress{
 			Direction: ndp.Source,
