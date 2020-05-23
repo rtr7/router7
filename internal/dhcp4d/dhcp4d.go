@@ -16,9 +16,13 @@
 package dhcp4d
 
 import (
+	"bytes"
+	"encoding/hex"
 	"log"
 	"math/rand"
 	"net"
+	"sort"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -246,17 +250,32 @@ func (h *Handler) leaseHW(hwAddr string) (*Lease, bool) {
 	return l, ok && l.HardwareAddr == hwAddr
 }
 
+func (h *Handler) leasePeriodForDevice(hwAddr string) time.Duration {
+	hwAddrPrefix, err := hex.DecodeString(strings.ReplaceAll(hwAddr, ":", ""))
+	if err != nil {
+		return h.LeasePeriod
+	}
+	hwAddrPrefix = hwAddrPrefix[:3]
+	i := sort.Search(len(nintendoMacPrefixes), func(i int) bool {
+		return bytes.Compare(nintendoMacPrefixes[i][:], hwAddrPrefix) >= 0
+	})
+	if i < len(nintendoMacPrefixes) && bytes.Equal(nintendoMacPrefixes[i][:], hwAddrPrefix) {
+		return 1 * time.Hour
+	}
+	return h.LeasePeriod
+}
+
 // TODO: is ServeDHCP always run from the same goroutine, or do we need locking?
 func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options dhcp4.Options) dhcp4.Packet {
 	reqIP := net.IP(options[dhcp4.OptionRequestedIPAddress])
 	if reqIP == nil {
 		reqIP = net.IP(p.CIAddr())
 	}
+	hwAddr := p.CHAddr().String()
 
 	switch msgType {
 	case dhcp4.Discover:
 		free := -1
-		hwAddr := p.CHAddr().String()
 
 		// try to offer the requested IP, if any and available
 		if !reqIP.To4().Equal(net.IPv4zero) {
@@ -284,14 +303,14 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			dhcp4.Offer,
 			h.serverIP,
 			dhcp4.IPAdd(h.start, free),
-			h.LeasePeriod,
+			h.leasePeriodForDevice(hwAddr),
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
 
 	case dhcp4.Request:
 		if server, ok := options[dhcp4.OptionServerIdentifier]; ok && !net.IP(server).Equal(h.serverIP) {
 			return nil // message not for this dhcp server
 		}
-		leaseNum := h.canLease(reqIP, p.CHAddr().String())
+		leaseNum := h.canLease(reqIP, hwAddr)
 		if leaseNum == -1 {
 			return dhcp4.ReplyPacket(p, dhcp4.NAK, h.serverIP, nil, 0, nil)
 		}
@@ -299,8 +318,8 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		lease := &Lease{
 			Num:          leaseNum,
 			Addr:         make([]byte, 4),
-			HardwareAddr: p.CHAddr().String(),
-			Expiry:       h.timeNow().Add(h.LeasePeriod),
+			HardwareAddr: hwAddr,
+			Expiry:       h.timeNow().Add(h.leasePeriodForDevice(hwAddr)),
 			Hostname:     string(options[dhcp4.OptionHostName]),
 		}
 		copy(lease.Addr, reqIP.To4())
@@ -327,7 +346,12 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		h.leasesIP[leaseNum] = lease
 		h.leasesHW[lease.HardwareAddr] = leaseNum
 		h.callLeasesLocked(lease)
-		return dhcp4.ReplyPacket(p, dhcp4.ACK, h.serverIP, reqIP, h.LeasePeriod,
+		return dhcp4.ReplyPacket(
+			p,
+			dhcp4.ACK,
+			h.serverIP,
+			reqIP,
+			h.leasePeriodForDevice(hwAddr),
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
 	}
 	return nil

@@ -15,6 +15,7 @@
 package dhcp4d
 
 import (
+	"encoding/binary"
 	"io/ioutil"
 	"net"
 	"os"
@@ -453,5 +454,49 @@ func TestPersistentStorage(t *testing.T) {
 	resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
 	if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
 		t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
+	}
+}
+
+func TestMinimumLeaseTime(t *testing.T) {
+	handler, cleanup := testHandler(t)
+	defer cleanup()
+
+	var addr = net.IP{192, 168, 42, 23}
+
+	for _, tt := range []struct {
+		hwaddr        net.HardwareAddr
+		wantLeaseTime time.Duration
+	}{
+		{
+			hwaddr:        net.HardwareAddr{0x11, 0x22, 0x33, 0x44, 0x55, 0x66},
+			wantLeaseTime: 20 * time.Minute,
+		},
+
+		{
+			// Nintendo MAC address range for Nintendo Switch specific minimum
+			// lease time quirk:
+			hwaddr:        net.HardwareAddr{0x7c, 0xbb, 0x8a, 0x11, 0x22, 0x33},
+			wantLeaseTime: 1 * time.Hour,
+		},
+	} {
+		p := discover(addr, tt.hwaddr)
+		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
+		if resp == nil {
+			t.Fatalf("DHCPDISCOVER(%v) = nil", tt.hwaddr)
+		}
+		if got, want := messageType(resp), dhcp4.Offer; got != want {
+			t.Errorf("DHCPDISCOVER resulted in unexpected message type: got %v, want %v", got, want)
+		}
+
+		opts := resp.ParseOptions()
+		leaseTimeBytes, ok := opts[dhcp4.OptionIPAddressLeaseTime]
+		if !ok {
+			t.Fatalf("DHCPDISCOVER(%v): lease time option not set", tt.hwaddr)
+		}
+		leaseTimeSecs := binary.BigEndian.Uint32(leaseTimeBytes)
+		want := uint32(tt.wantLeaseTime.Seconds())
+		if got := leaseTimeSecs; got != want {
+			t.Errorf("unexpected lease time for hwaddr %v: got %d, want %d", tt.hwaddr, got, want)
+		}
 	}
 }
