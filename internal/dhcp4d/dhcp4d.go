@@ -353,6 +353,35 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			reqIP,
 			h.leasePeriodForDevice(hwAddr),
 			h.options.SelectOrderOrAll(options[dhcp4.OptionParameterRequestList]))
+	case dhcp4.Decline:
+		if h.expireLease(hwAddr) {
+			log.Printf("Expired leases for %v upon DHCPDECLINE", hwAddr)
+		}
+		// Decline does not expect an ACK response.
+		return nil
 	}
 	return nil
+}
+
+// expireLease expires the lease for hwAddr and reports whether or not the
+// lease was actually expired by this call.
+func (h *Handler) expireLease(hwAddr string) bool {
+	h.leasesMu.Lock()
+	defer h.leasesMu.Unlock()
+
+	// TODO: deduplicate with h.leaseHW which also acquires h.leasesMu.
+
+	num, ok := h.leasesHW[hwAddr]
+	if !ok {
+		return false
+	}
+	l, ok := h.leasesIP[num]
+	if !ok {
+		return false
+	}
+	if l.HardwareAddr != hwAddr {
+		return false
+	}
+	l.Expiry = time.Now()
+	return true
 }

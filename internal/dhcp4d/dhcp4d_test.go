@@ -50,6 +50,10 @@ func discover(addr net.IP, hwaddr net.HardwareAddr, opts ...dhcp4.Option) dhcp4.
 	return packet(dhcp4.Discover, addr, hwaddr, opts)
 }
 
+func decline(addr net.IP, hwaddr net.HardwareAddr, opts ...dhcp4.Option) dhcp4.Packet {
+	return packet(dhcp4.Decline, addr, hwaddr, opts)
+}
+
 const goldenInterfaces = `
 {
   "interfaces":[
@@ -499,4 +503,57 @@ func TestMinimumLeaseTime(t *testing.T) {
 			t.Errorf("unexpected lease time for hwaddr %v: got %d, want %d", tt.hwaddr, got, want)
 		}
 	}
+}
+
+func TestClientDecline(t *testing.T) {
+	handler, cleanup := testHandler(t)
+	defer cleanup()
+
+	now := time.Now()
+	handler.timeNow = func() time.Time { return now }
+
+	addr := net.IP{192, 168, 42, 23}
+
+	hardwareAddr := net.HardwareAddr{0xaa, 0xbb, 0xcc, 0xdd, 0xee, 0xff}
+
+	// macbook requests a new lease
+	t.Run("mbp grabs an address", func(t *testing.T) {
+		p := request(addr, hardwareAddr)
+		resp := handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
+		if got, want := messageType(resp), dhcp4.ACK; got != want {
+			t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
+		}
+	})
+
+	// macbook lease expires
+	now = now.Add(3 * time.Hour)
+
+	t.Run("mbp requests previous address", func(t *testing.T) {
+		p := request(addr, hardwareAddr)
+		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
+		if got, want := resp.YIAddr().To4(), addr.To4(); !got.Equal(want) {
+			t.Errorf("DHCPOFFER for wrong IP: got %v, want %v", got, want)
+		}
+		p = request(addr, hardwareAddr)
+		resp = handler.serveDHCP(p, dhcp4.Request, p.ParseOptions())
+		if got, want := messageType(resp), dhcp4.ACK; got != want {
+			t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
+		}
+	})
+
+	t.Run("mbp declines address", func(t *testing.T) {
+		p := decline(addr, hardwareAddr)
+		resp := handler.serveDHCP(p, dhcp4.Decline, p.ParseOptions())
+		if resp != nil {
+			t.Fatalf("DHCPDECLINE was unexpectedly answered: %v", messageType(resp))
+		}
+	})
+
+	t.Run("mbp requests any address", func(t *testing.T) {
+		p := request(net.IPv4zero, hardwareAddr)
+		resp := handler.serveDHCP(p, dhcp4.Discover, p.ParseOptions())
+		if got, want := resp.YIAddr().To4(), addr.To4(); got.Equal(want) {
+			t.Errorf("DHCPOFFER returned unexpected address: %v", got)
+		}
+	})
 }
