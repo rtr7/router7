@@ -255,6 +255,10 @@ func (h *Handler) leasePeriodForDevice(hwAddr string) time.Duration {
 	if err != nil {
 		return h.LeasePeriod
 	}
+	if len(hwAddrPrefix) != 6 {
+		// Invalid MAC address
+		return h.LeasePeriod
+	}
 	hwAddrPrefix = hwAddrPrefix[:3]
 	i := sort.Search(len(nintendoMacPrefixes), func(i int) bool {
 		return bytes.Compare(nintendoMacPrefixes[i][:], hwAddrPrefix) >= 0
