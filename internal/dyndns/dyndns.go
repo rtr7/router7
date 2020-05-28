@@ -48,12 +48,6 @@ func Update(ctx context.Context, zone string, record libdns.Record, provider Rec
 			return nil
 		}
 
-		// TODO: it appears the cloudflare provider expects a non-empty ID to
-		// mean that a record should be created rather than updated. This behavior
-		// means that we clear the ID to force an update by the zone name.
-		//
-		// See: https://github.com/libdns/cloudflare/issues/1.
-		rec.ID = ""
 		rec.Value = record.Value
 		updated = append(updated, rec)
 		break
