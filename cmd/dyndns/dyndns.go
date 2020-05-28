@@ -27,6 +27,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/gokrazy/gokrazy"
 	"github.com/libdns/cloudflare"
 	"github.com/libdns/libdns"
 	"github.com/rtr7/router7/internal/dyndns"
@@ -126,6 +127,9 @@ func main() {
 	}
 	b, err := ioutil.ReadFile(*configFile)
 	if err != nil {
+		if os.IsNotExist(err) {
+			gokrazy.DontStartOnBoot()
+		}
 		log.Fatal(err)
 	}
 	if err := json.Unmarshal(b, &config); err != nil {
