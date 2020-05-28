@@ -59,5 +59,9 @@ func Update(ctx context.Context, zone string, record libdns.Record, provider Rec
 	if _, err := provider.SetRecords(ctx, zone, updated); err != nil {
 		return err
 	}
+	log.Printf("updated record: %s %s %s",
+		record.Name,
+		record.Type,
+		record.Value)
 	return nil
 }
