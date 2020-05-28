@@ -41,7 +41,10 @@ func Update(ctx context.Context, zone string, record libdns.Record, provider Rec
 		}
 
 		if rec.Value == record.Value {
-			log.Printf("exit early: record up to date (%s)", record.Value)
+			log.Printf("record up to date: %s %s %s",
+				record.Name,
+				record.Type,
+				record.Value)
 			return nil
 		}
 
