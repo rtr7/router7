@@ -60,3 +60,32 @@ strace:
 
 update:
 	rtr7-safe-update -build_command='make -C ~/router7 image DIR=$GOKR_DIR'
+
+# sudo ip link add link enp0s31f6 name macvtap0 type macvtap
+# sudo ip link set macvtap0 address 52:55:00:d1:55:03 up
+#
+# TODO: use veth pairs for router7’s lan0?
+# e.g. get a network namespace to talk through router7
+# ip link add dev veth1 type veth peer name veth2
+qemu:
+	GOARCH=amd64 gokr-packer \
+		-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp,github.com/gokrazy/gokrazy/cmd/randomd \
+		-hostname=qemu-router7 \
+		-kernel_package=github.com/rtr7/kernel \
+		-firmware_package=github.com/rtr7/kernel \
+		-overwrite=/tmp/router7-qemu/disk.img \
+		-target_storage_bytes=$$((2*1024*1024*1024)) \
+		-serial_console=ttyS0,115200 \
+		${PKGS}
+	./travis/loopmkfs.sh
+	# TODO: without -smp, nothing works! is that GOMAXPROCS defaulting to 1 or something?
+	qemu-system-x86_64 \
+		-boot order=d \
+		-drive file=/tmp/router7-qemu/disk.img,format=raw \
+		-netdev tap,id=uplink,fd=3 3<>/dev/tap184 \
+		-device virtio-net-pci,netdev=uplink,mac=52:55:00:d1:55:03 \
+		-device virtio-net-pci,id=lan,mac=52:55:00:d1:55:04 \
+		-smp 8 \
+		-machine accel=kvm \
+		-m 4096 \
+		-nographic
