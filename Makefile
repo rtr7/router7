@@ -85,6 +85,7 @@ qemu:
 		-netdev tap,id=uplink,fd=3 3<>/dev/tap184 \
 		-device virtio-net-pci,netdev=uplink,mac=52:55:00:d1:55:03 \
 		-device virtio-net-pci,id=lan,mac=52:55:00:d1:55:04 \
+		-device i6300esb,id=watchdog0 -watchdog-action reset \
 		-smp 8 \
 		-machine accel=kvm \
 		-m 4096 \
