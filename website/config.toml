@@ -1,0 +1,19 @@
+baseURL = "https://router7.org/"
+languageCode = "en-us"
+title = "router7"
+theme = "router7"
+disableKinds = ["RSS", "taxonomyTerm"]
+publishDir = "../docs/"
+enableRobotsTXT = true
+
+[markup.goldmark.renderer]
+# Required for e.g. <img> tags in markdown articles.
+unsafe = true
+
+[menu]
+
+  [[menu.main]]
+    name = "github"
+    title = "GitHub"
+    url = "https://github.com/rtr7/router7"
+    weight = 60

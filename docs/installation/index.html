@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>  <head>
+    
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" crossorigin="anonymous">
+
+    
+    
+    <link rel="stylesheet" href="https://router7.org/sass/sidebar.css">
+
+    <title>router7: installation</title>
+  </head>
+<body>
+        <div id="content">
+	  <div class="container">
+	    <div class="row">
+	      <div class="col-md-10"><nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <a class="navbar-brand" href="#">router7</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+    <div class="navbar-nav ml-auto">
+      
+      
+      
+      <a class="nav-item nav-link " href="/">Home </a>
+      
+      
+      <a class="nav-item nav-link " href="/architecture/">Architecture </a>
+      
+      
+      <a class="nav-item nav-link active" href="/installation/">Installation <span class="sr-only">(current)</span></a>
+      
+      
+      <a class="nav-item nav-link " href="https://github.com/rtr7/router7">GitHub </a>
+      
+    </div>
+  </div>
+</nav>
+<h1 id="installation">Installation</h1>
+<p>Connect your serial adapter (<a href="https://pcengines.ch/usbcom1a.htm">usbcom1a</a> works well if you don’t have one already) to the apu2c4 and start a program to use it, e.g. <code>screen /dev/ttyUSB0 115200</code>. Then, power on the apu2c4 and configure it to do PXE boot:</p>
+<ul>
+<li>Press <code>F10</code> to enter the boot menu</li>
+<li>Press <code>3</code> to enter setup</li>
+<li>Press <code>n</code> to enable network boot</li>
+<li>Press <code>c</code> to move mSATA to the top of the boot order</li>
+<li>Press <code>e</code> to move iPXE to the top of the boot order</li>
+<li>Press <code>s</code> to save configuration and exit</li>
+</ul>
+<p>Connect a network cable on <code>net0</code>, the port closest to the serial console port:</p>
+<p><img src="https://github.com/rtr7/router7/raw/master/devsetup.jpg"
+width="800" alt="router7 development setup"></p>
+<p>Next, build a router7 image:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">go get -u github.com/gokrazy/tools/cmd/gokr-packer github.com/rtr7/tools/cmd/...
+go get -u -d github.com/rtr7/router7
+mkdir /tmp/recovery
+GOARCH<span style="color:#f92672">=</span>amd64 gokr-packer <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	-hostname<span style="color:#f92672">=</span>router7 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	-overwrite_boot<span style="color:#f92672">=</span>/tmp/recovery/boot.img <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	-overwrite_mbr<span style="color:#f92672">=</span>/tmp/recovery/mbr.img <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	-overwrite_root<span style="color:#f92672">=</span>/tmp/recovery/root.img <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	-kernel_package<span style="color:#f92672">=</span>github.com/rtr7/kernel <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	-firmware_package<span style="color:#f92672">=</span>github.com/rtr7/kernel <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	-gokrazy_pkgs<span style="color:#f92672">=</span>github.com/gokrazy/gokrazy/cmd/ntp <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	-serial_console<span style="color:#f92672">=</span>ttyS0,115200n8 <span style="color:#ae81ff">\
+</span><span style="color:#ae81ff"></span>	github.com/rtr7/router7/cmd/...
+</code></pre></div><p>Run <code>rtr7-recover -boot=/tmp/recovery/boot.img -mbr=/tmp/recovery/mbr.img -root=/tmp/recovery/root.img</code> to:</p>
+<ul>
+<li>trigger a reset <a href="#rebootor">if a Teensy with the rebootor firmware is attached</a></li>
+<li>serve a DHCP lease to all clients which request PXE boot (i.e., your apu2c4)</li>
+<li>serve via TFTP:
+<ul>
+<li>the PXELINUX bootloader</li>
+<li>the router7 kernel</li>
+<li>an initrd archive containing the rtr7-recovery-init program and mke2fs</li>
+</ul>
+</li>
+<li>serve via HTTP the boot and root images</li>
+<li>optionally serve via HTTP a backup.tar.gz image containing files for <code>/perm</code> (e.g. for moving to new hardware, rolling back corrupted state, or recovering from a disk failure)</li>
+<li>exit once the router successfully wrote the images to disk</li>
+</ul>
+<h2 id="updates">Updates</h2>
+<p>Run e.g. <code>rtr7-safe-update -updates_dir=$HOME/router7/updates</code> to:</p>
+<ul>
+<li>verify the router currently has connectivity, abort the update otherwise</li>
+<li>download a backup archive of <code>/perm</code></li>
+<li>build a new image</li>
+<li>update the router</li>
+<li>wait until the router restored connectivity, roll back the update using <code>rtr7-recover</code> otherwise</li>
+</ul>
+<p>The update step uses kexec to reduce the downtime to approximately 15 seconds.</p>
+<h2 id="manual-recovery">Manual Recovery</h2>
+<p>Given <code>rtr7-safe-update</code>’s safeguards, manual recovery should rarely be required.</p>
+<p>To manually roll back to an older image, invoke <code>rtr7-safe-update</code> via the
+<code>recover.bash</code> script in the image directory underneath <code>-updates_dir</code>, e.g.:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">% cd ~/router7/updates/2018-07-03T17:33:52+02:00
+% ./recover.bash
+</code></pre></div><h2 id="rebootor">Teensy rebootor</h2>
+<p>The cheap and widely-available <a href="https://www.pjrc.com/store/teensypp.html">Teensy++ USB development board</a> comes with a firmware called rebootor, which is used by the <a href="https://www.pjrc.com/teensy/loader_cli.html"><code>teensy_loader_cli</code></a> program to perform hard resets.</p>
+<p>This setup can be used to programmatically reset the apu2c4 (from <code>rtr7-recover</code>) by connecting the Teensy++ to the <a href="http://pcengines.ch/pdf/apu2.pdf">apu2c4’s reset pins</a>:</p>
+<ul>
+<li>connect the Teensy++’s <code>GND</code> pin to the apu2c4 J2’s pin 4 (<code>GND</code>)</li>
+<li>connect the Teensy++’s <code>B7</code> pin to the apu2c4 J2’s pin 5 (<code>3.3V</code>, resets when pulled to <code>GND</code>)</li>
+</ul>
+<p>You can find a working rebootor firmware .hex file at <a href="https://github.com/PaulStoffregen/teensy_loader_cli/issues/38">https://github.com/PaulStoffregen/teensy_loader_cli/issues/38</a></p>
+<h2 id="prometheus">Prometheus</h2>
+<p>See <a href="https://github.com/rtr7/router7/tree/master/contrib/prometheus">https://github.com/rtr7/router7/tree/master/contrib/prometheus</a> for example
+configuration files, and install the <a href="https://grafana.com/dashboards/8288">router7 Grafana
+Dashboard</a>.</p>
+
+
+<hr>
+
+<p class="small">
+  © 2018 Michael Stapelberg and contributors
+</p>
+	      </div>
+	      <div class="col-md-2">
+		<aside class="bd-toc">
+		  <nav id="TableOfContents">
+  <ul>
+    <li><a href="#updates">Updates</a></li>
+    <li><a href="#manual-recovery">Manual Recovery</a></li>
+    <li><a href="#rebootor">Teensy rebootor</a></li>
+    <li><a href="#prometheus">Prometheus</a></li>
+  </ul>
+</nav>
+		</aside>
+	      </div>
+	    </div>
+
+
+	  </div>
+        </div>    
+    
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+  </body>
+</html>
+</body>
+</html>

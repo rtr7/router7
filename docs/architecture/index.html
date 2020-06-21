@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html>  <head>
+    
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" crossorigin="anonymous">
+
+    
+    
+    <link rel="stylesheet" href="https://router7.org/sass/sidebar.css">
+
+    <title>router7: architecture</title>
+  </head>
+<body>
+        <div id="content">
+	  <div class="container">
+	    <div class="row">
+	      <div class="col-md-10"><nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <a class="navbar-brand" href="#">router7</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+    <div class="navbar-nav ml-auto">
+      
+      
+      
+      <a class="nav-item nav-link " href="/">Home </a>
+      
+      
+      <a class="nav-item nav-link active" href="/architecture/">Architecture <span class="sr-only">(current)</span></a>
+      
+      
+      <a class="nav-item nav-link " href="/installation/">Installation </a>
+      
+      
+      <a class="nav-item nav-link " href="https://github.com/rtr7/router7">GitHub </a>
+      
+    </div>
+  </div>
+</nav>
+<h1 id="architecture">Architecture</h1>
+<p>router7 is based on <a href="https://gokrazy.org/">gokrazy</a>: it is an appliance which gets packed into a hard disk image, containing a FAT partition with the kernel, a read-only SquashFS partition for the root file system and an ext4 partition for permanent data.</p>
+<p>The individual services can be found in <a href="https://pkg.go.dev/github.com/rtr7/router7/cmd">github.com/rtr7/router7/cmd</a></p>
+<ul>
+<li>Each service runs in a separate process.</li>
+<li>Services communicate with each other by persisting state files. E.g., <code>cmd/dhcp4</code> writes <code>/perm/dhcp4/wire/lease.json</code>.</li>
+<li>A service notifies other services about state changes by sending them signal <code>SIGUSR1</code>.</li>
+</ul>
+<h2 id="configuration-files">Configuration files</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Consumer(s)</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/perm/interfaces.json</code></td>
+<td><code>netconfigd</code></td>
+<td>Set IP/MAC addresses of <code>uplink0</code> and <code>lan0</code></td>
+</tr>
+<tr>
+<td><code>/perm/portforwardings.json</code></td>
+<td><code>netconfigd</code></td>
+<td>Configure nftables port forwarding rules</td>
+</tr>
+<tr>
+<td><code>/perm/dhcp6/duid</code></td>
+<td><code>dhcp6</code></td>
+<td>Set DHCP Unique Identifier (DUID) for obtaining static leases</td>
+</tr>
+</tbody>
+</table>
+<h2 id="state-files">State files</h2>
+<table>
+<thead>
+<tr>
+<th>File</th>
+<th>Producer</th>
+<th>Consumer(s)</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>/perm/dhcp4/wire/ack</code></td>
+<td><code>dhcp4</code></td>
+<td><code>dhcp4</code></td>
+<td>last DHCPACK packet for renewals across restarts</td>
+</tr>
+<tr>
+<td><code>/perm/dhcp4/wire/lease.json</code></td>
+<td><code>dhcp4</code></td>
+<td><code>netconfigd</code></td>
+<td>Obtained DHCPv4 lease</td>
+</tr>
+<tr>
+<td><code>/perm/dhcp6/wire/lease.json</code></td>
+<td><code>dhcp6</code></td>
+<td><code>netconfigd</code>, <code>radvd</code></td>
+<td>Obtained DHCPv6 lease</td>
+</tr>
+<tr>
+<td><code>/perm/dhcp4d/leases.json</code></td>
+<td><code>dhcp4d</code></td>
+<td><code>dhcp4d</code>, <code>dnsd</code></td>
+<td>DHCPv4 leases handed out (including hostnames)</td>
+</tr>
+</tbody>
+</table>
+<h2 id="available-ports">Available ports</h2>
+<table>
+<thead>
+<tr>
+<th>Port</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>&lt;public&gt;:8053</code></td>
+<td><code>dnsd</code> metrics (forwarded requests)</td>
+</tr>
+<tr>
+<td><code>&lt;public&gt;:8066</code></td>
+<td><code>netconfigd</code> metrics (nftables counters)</td>
+</tr>
+<tr>
+<td><code>&lt;private&gt;:80</code></td>
+<td>gokrazy web interface</td>
+</tr>
+<tr>
+<td><code>&lt;private&gt;:67</code></td>
+<td><code>dhcp4d</code></td>
+</tr>
+<tr>
+<td><code>&lt;private&gt;:58</code></td>
+<td><code>radvd</code></td>
+</tr>
+<tr>
+<td><code>&lt;private&gt;:53</code></td>
+<td><code>dnsd</code></td>
+</tr>
+<tr>
+<td><code>&lt;private&gt;:8077</code></td>
+<td><code>backupd</code> (serve backup.tar.gz)</td>
+</tr>
+<tr>
+<td><code>&lt;private&gt;:7733</code></td>
+<td><code>diagd</code> (perform diagnostics)</td>
+</tr>
+<tr>
+<td><code>&lt;private&gt;:5022</code></td>
+<td><code>captured</code> (serve captured packets)</td>
+</tr>
+</tbody>
+</table>
+<p>Here’s an example of <code>cmd/diagd</code> output:</p>
+<p><img src="https://github.com/rtr7/router7/raw/master/2018-07-14-diagd.png"
+width="800" alt="diagd output"></p>
+<p>Here’s an example of <code>cmd/netconfigd</code> metrics when scraped with <a href="https://prometheus.io/">Prometheus</a> and displayed in <a href="https://grafana.com/">Grafana</a>:</p>
+<p><img src="https://github.com/rtr7/router7/raw/master/2018-07-14-grafana.png"
+width="800" alt="metrics in grafana"></p>
+
+
+<hr>
+
+<p class="small">
+  © 2018 Michael Stapelberg and contributors
+</p>
+	      </div>
+	      <div class="col-md-2">
+		<aside class="bd-toc">
+		  <nav id="TableOfContents">
+  <ul>
+    <li><a href="#configuration-files">Configuration files</a></li>
+    <li><a href="#state-files">State files</a></li>
+    <li><a href="#available-ports">Available ports</a></li>
+  </ul>
+</nav>
+		</aside>
+	      </div>
+	    </div>
+
+
+	  </div>
+        </div>    
+    
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+  </body>
+</html>
+</body>
+</html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>  <head>
+	<meta name="generator" content="Hugo 0.71.0-DEV" />
+    
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+
+    
+    <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css" crossorigin="anonymous">
+
+    
+    
+    <link rel="stylesheet" href="https://router7.org/sass/sidebar.css">
+
+    <title>router7: a small home internet router completely written in Go</title>
+  </head>
+<body>
+        <div id="content">
+	  <div class="container">
+	    <div class="row">
+	      <div class="col-md-10"><nav class="navbar navbar-expand-lg navbar-light bg-light">
+  <a class="navbar-brand" href="#">router7</a>
+  <button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarNavAltMarkup" aria-controls="navbarNavAltMarkup" aria-expanded="false" aria-label="Toggle navigation">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse" id="navbarNavAltMarkup">
+    <div class="navbar-nav ml-auto">
+      
+      
+      
+      <a class="nav-item nav-link active" href="/">Home <span class="sr-only">(current)</span></a>
+      
+      
+      <a class="nav-item nav-link " href="/architecture/">Architecture </a>
+      
+      
+      <a class="nav-item nav-link " href="/installation/">Installation </a>
+      
+      
+      <a class="nav-item nav-link " href="https://github.com/rtr7/router7">GitHub </a>
+      
+    </div>
+  </div>
+</nav>
+<h1 id="router7">router7</h1>
+<p>router7 is a pure-Go implementation of a small home internet router. It comes with all the services required to make a <a href="https://www.init7.net/en/internet/fiber7/">fiber7 internet connection</a> work (DHCPv4, DHCPv6, DNS, etc.).</p>
+<p>Note that this project should be considered a (working!) tech demo. Feature requests will likely not be implemented, and see <a href="CONTRIBUTING.md">CONTRIBUTING.md</a> for details about which contributions are welcome.</p>
+<h2 id="motivation">Motivation</h2>
+<p>Before starting router7, I was using the <a href="https://omnia.turris.cz/en/">Turris Omnia</a> router running OpenWrt. That worked fine up until May 2018, when an automated update pulled in a new version of <a href="https://git.openwrt.org/?p=project/odhcp6c.git;a=shortlog">odhcp6c</a>, OpenWrt’s DHCPv6 client. That version is incompatible with fiber7’s DHCP server setup (I think there are shortcomings on both sides).</p>
+<p>It was not only quicker to develop my own router than to wait for either side to resolve the issue, but it was also a lot of fun and allowed me to really tailor my router to my needs, experimenting with a bunch of interesting ideas I had.</p>
+<h2 id="project-goals">Project goals</h2>
+<ul>
+<li>Maximize internet connectivity: retain the most recent DHCP configuration across reboots and even after its expiration (chances are the DHCP server will be back before the configuration stops working).</li>
+<li>Unit/integration tests use fiber7 packet capture files to minimize the chance of software changes breaking my connectivity.</li>
+<li>Safe and quick updates
+<ul>
+<li>Auto-rollback of updates which result in loss of connectivity: the diagnostics daemon assesses connectivity state, the update tool reads it and rolls back faulty updates.</li>
+<li>Thanks to kexec, updates translate into merely 13s of internet connectivity loss.</li>
+</ul>
+</li>
+<li>Easy debugging
+<ul>
+<li>Configuration-related network packets (e.g. DHCP, IPv6 neighbor/router advertisements) are stored in a ring buffer which can be streamed into <a href="https://www.wireshark.org/">Wireshark</a>, allowing for live and retro-active debugging.</li>
+<li>The diagnostics daemon performs common diagnostic steps (ping, traceroute, …) for you.</li>
+<li>All state in the system is stored as human-readable JSON within the <code>/perm</code> partition and can be modified.</li>
+</ul>
+</li>
+</ul>
+<h2 id="hardware">Hardware</h2>
+<p>The reference hardware platform is the <a href="https://pcengines.ch/apu2c4.htm">PC Engines™ apu2c4</a> system board. It features a 1 GHz quad core amd64 CPU, 4 GB of RAM, 3 Ethernet ports and a DB9 serial port. It conveniently supports PXE boot, the schematics and bootloader sources are available. I recommend the <a href="https://pcengines.ch/msata16g.htm">msata16g</a> SSD module for reliable persistent storage and the <a href="https://pcengines.ch/usbcom1a.htm">usbcom1a</a> serial adapter if you don’t have one already.</p>
+<p>Other hardware might work, too, but is not tested.</p>
+
+
+<hr>
+
+<p class="small">
+  © 2018 Michael Stapelberg and contributors
+</p>
+	      </div>
+	      <div class="col-md-2">
+	      </div>
+	    </div>
+
+
+	  </div>
+        </div>    
+    
+    <script src="https://code.jquery.com/jquery-3.4.1.slim.min.js" integrity="sha384-J6qa4849blE2+poT4WnyKhv5vZF5SrPo0iEjwBvKU7imGFAV0wwj1yYfoRSJoZ+n" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/popper.js@1.16.0/dist/umd/popper.min.js" integrity="sha384-Q6E9RHvbIyZFJoft+2mJbHaEWldlvI9IOYy5n3zV9zzTtmI3UksdQRVvoxMfooAo" crossorigin="anonymous"></script>
+    <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js" integrity="sha384-wfSDF2E50Y2D1uUdj0O3uMBJnjuUD4Ih7YwaYd1iqfktj0Uod8GCExl3Og8ifwB6" crossorigin="anonymous"></script>
+  </body>
+</html>
+</body>
+</html>
