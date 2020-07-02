@@ -266,6 +266,14 @@ func (c *Client) ObtainOrRenew() bool {
 	}
 
 	c.advertise = advertise
+
+	if iapd := advertise.Options.OneIAPD(); iapd != nil {
+		if status := iapd.Options.Status(); status != nil && status.StatusCode != iana.StatusSuccess {
+			c.err = fmt.Errorf("IAPD error: %v (%v)", status.StatusCode, status.StatusMessage)
+			return false
+		}
+	}
+
 	_, reply, err := c.request(advertise)
 	if err != nil {
 		c.err = err
