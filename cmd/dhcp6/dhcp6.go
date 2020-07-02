@@ -27,6 +27,7 @@ import (
 	"time"
 
 	"github.com/google/renameio"
+	"github.com/jpillora/backoff"
 	"github.com/rtr7/router7/internal/dhcp6"
 	"github.com/rtr7/router7/internal/notify"
 	"github.com/rtr7/router7/internal/teelogger"
@@ -54,12 +55,21 @@ func logic() error {
 	}
 	usr2 := make(chan os.Signal, 1)
 	signal.Notify(usr2, syscall.SIGUSR2)
+	backoff := backoff.Backoff{
+		Factor: 2,
+		Jitter: true,
+		Min:    10 * time.Second,
+		Max:    1 * time.Minute,
+	}
+
 	for c.ObtainOrRenew() {
 		if err := c.Err(); err != nil {
-			log.Printf("Temporary error: %v", err)
-			time.Sleep(10 * time.Second)
+			dur := backoff.Duration()
+			log.Printf("Temporary error: %v (waiting %v)", err, dur)
+			time.Sleep(dur)
 			continue
 		}
+		backoff.Reset()
 		log.Printf("lease: %+v", c.Config())
 		b, err := json.Marshal(c.Config())
 		if err != nil {
