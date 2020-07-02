@@ -213,6 +213,11 @@ func (w *wgLink) Attrs() *netlink.LinkAttrs {
 }
 
 var wireGuardAvailable = func() bool {
+	// The wg tool must also be available for our test to succeed:
+	if _, err := exec.LookPath("wg"); err == nil {
+		return false
+	}
+
 	// ns must not collide with any namespace used in the test functions: this
 	// function will be called by the helper process, too.
 	const ns = "ns4"
