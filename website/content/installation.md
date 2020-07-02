@@ -33,6 +33,7 @@ GOARCH=amd64 gokr-packer \
 	-overwrite_boot=/tmp/recovery/boot.img \
 	-overwrite_mbr=/tmp/recovery/mbr.img \
 	-overwrite_root=/tmp/recovery/root.img \
+	-eeprom_package= \
 	-kernel_package=github.com/rtr7/kernel \
 	-firmware_package=github.com/rtr7/kernel \
 	-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp \

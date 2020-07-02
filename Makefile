@@ -16,6 +16,7 @@ endif
 		-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp,github.com/gokrazy/gokrazy/cmd/randomd \
 		-kernel_package=github.com/rtr7/kernel \
 		-firmware_package=github.com/rtr7/kernel \
+		-eeprom_package= \
 		-overwrite_boot=${DIR}/boot.img \
 		-overwrite_root=${DIR}/root.img \
 		-overwrite_mbr=${DIR}/mbr.img \
@@ -31,6 +32,7 @@ recover: #test
 		-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp,github.com/gokrazy/gokrazy/cmd/randomd \
 		-kernel_package=github.com/rtr7/kernel \
 		-firmware_package=github.com/rtr7/kernel \
+		-eeprom_package= \
 		-overwrite_boot=/tmp/recovery/boot.img \
 		-overwrite_root=/tmp/recovery/root.img \
 		-serial_console=ttyS0,115200n8 \
@@ -73,6 +75,7 @@ qemu:
 		-hostname=qemu-router7 \
 		-kernel_package=github.com/rtr7/kernel \
 		-firmware_package=github.com/rtr7/kernel \
+		-eeprom_package= \
 		-overwrite=/tmp/router7-qemu/disk.img \
 		-target_storage_bytes=$$((2*1024*1024*1024)) \
 		-serial_console=ttyS0,115200 \
