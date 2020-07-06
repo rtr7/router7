@@ -53,6 +53,62 @@ Run `rtr7-recover -boot=/tmp/recovery/boot.img -mbr=/tmp/recovery/mbr.img -root=
 * optionally serve via HTTP a backup.tar.gz image containing files for `/perm` (e.g. for moving to new hardware, rolling back corrupted state, or recovering from a disk failure)
 * exit once the router successfully wrote the images to disk
 
+## Configuration
+
+### Interfaces
+
+The `/perm/interfaces.json` configuration file will be [automatically created](https://github.com/rtr7/tools/blob/57c2cdc3b629d2fbd13564ae37f6282f6ee8427f/cmd/rtr7-recovery-init/recoveryinit.go#L320) if it is not present when you run the first recovery.
+
+Example:
+
+```json
+{
+    "interfaces": [
+        {
+            "hardware_addr": "12:34:56:78:9a:b0",
+            "name": "lan0",
+            "addr": "192.168.0.1/24"
+        },
+        {
+            "hardware_addr": "12:34:56:78:9a:b2",
+            "name": "uplink0"
+        }
+    ]
+}
+```
+
+Schema: see [`InterfaceConfig`](https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L183)
+
+### Port Forwarding
+
+The `/perm/portforwardings.json` configuration file can be created to define port forwarding rules.
+
+Example:
+
+```json
+{
+    "forwardings": [
+        {
+            "proto": "tcp",
+            "port": "22",
+            "dest_addr": "10.0.0.10",
+            "dest_port": "22"
+        },
+        {
+            "proto": "tcp",
+            "port": "80",
+            "dest_addr": "10.0.0.10",
+            "dest_port": "80"
+        }
+    ]
+}
+```
+
+Schema: see [`portForwardings`](
+https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L431)
+
+Please be aware that Hairpinning is currently not supported (see issue [#53 Support for Hairpinning](https://github.com/rtr7/router7/issues/53]))
+
 ## Updates
 
 Run e.g. `rtr7-safe-update -updates_dir=$HOME/router7/updates` to:
