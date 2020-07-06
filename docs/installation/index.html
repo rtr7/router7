@@ -84,6 +84,45 @@ GOARCH<span style="color:#f92672">=</span>amd64 gokr-packer <span style="color:#
 <li>optionally serve via HTTP a backup.tar.gz image containing files for <code>/perm</code> (e.g. for moving to new hardware, rolling back corrupted state, or recovering from a disk failure)</li>
 <li>exit once the router successfully wrote the images to disk</li>
 </ul>
+<h2 id="configuration">Configuration</h2>
+<h3 id="interfaces">Interfaces</h3>
+<p>The <code>/perm/interfaces.json</code> configuration file will be <a href="https://github.com/rtr7/tools/blob/57c2cdc3b629d2fbd13564ae37f6282f6ee8427f/cmd/rtr7-recovery-init/recoveryinit.go#L320">automatically created</a> if it is not present when you run the first recovery.</p>
+<p>Example:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+    <span style="color:#f92672">&#34;interfaces&#34;</span>: [
+        {
+            <span style="color:#f92672">&#34;hardware_addr&#34;</span>: <span style="color:#e6db74">&#34;12:34:56:78:9a:b0&#34;</span>,
+            <span style="color:#f92672">&#34;name&#34;</span>: <span style="color:#e6db74">&#34;lan0&#34;</span>,
+            <span style="color:#f92672">&#34;addr&#34;</span>: <span style="color:#e6db74">&#34;192.168.0.1/24&#34;</span>
+        },
+        {
+            <span style="color:#f92672">&#34;hardware_addr&#34;</span>: <span style="color:#e6db74">&#34;12:34:56:78:9a:b2&#34;</span>,
+            <span style="color:#f92672">&#34;name&#34;</span>: <span style="color:#e6db74">&#34;uplink0&#34;</span>
+        }
+    ]
+}
+</code></pre></div><p>Schema: see <a href="https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L183"><code>InterfaceConfig</code></a></p>
+<h3 id="port-forwarding">Port Forwarding</h3>
+<p>The <code>/perm/portforwardings.json</code> configuration file can be created to define port forwarding rules.</p>
+<p>Example:</p>
+<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
+    <span style="color:#f92672">&#34;forwardings&#34;</span>: [
+        {
+            <span style="color:#f92672">&#34;proto&#34;</span>: <span style="color:#e6db74">&#34;tcp&#34;</span>,
+            <span style="color:#f92672">&#34;port&#34;</span>: <span style="color:#e6db74">&#34;22&#34;</span>,
+            <span style="color:#f92672">&#34;dest_addr&#34;</span>: <span style="color:#e6db74">&#34;10.0.0.10&#34;</span>,
+            <span style="color:#f92672">&#34;dest_port&#34;</span>: <span style="color:#e6db74">&#34;22&#34;</span>
+        },
+        {
+            <span style="color:#f92672">&#34;proto&#34;</span>: <span style="color:#e6db74">&#34;tcp&#34;</span>,
+            <span style="color:#f92672">&#34;port&#34;</span>: <span style="color:#e6db74">&#34;80&#34;</span>,
+            <span style="color:#f92672">&#34;dest_addr&#34;</span>: <span style="color:#e6db74">&#34;10.0.0.10&#34;</span>,
+            <span style="color:#f92672">&#34;dest_port&#34;</span>: <span style="color:#e6db74">&#34;80&#34;</span>
+        }
+    ]
+}
+</code></pre></div><p>Schema: see <a href="https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L431"><code>portForwardings</code></a></p>
+<p>Please be aware that Hairpinning is currently not supported (see issue <a href="https://github.com/rtr7/router7/issues/53%5D">#53 Support for Hairpinning</a>)</p>
 <h2 id="updates">Updates</h2>
 <p>Run e.g. <code>rtr7-safe-update -updates_dir=$HOME/router7/updates</code> to:</p>
 <ul>
@@ -124,6 +163,12 @@ Dashboard</a>.</p>
 		<aside class="bd-toc">
 		  <nav id="TableOfContents">
   <ul>
+    <li><a href="#configuration">Configuration</a>
+      <ul>
+        <li><a href="#interfaces">Interfaces</a></li>
+        <li><a href="#port-forwarding">Port Forwarding</a></li>
+      </ul>
+    </li>
     <li><a href="#updates">Updates</a></li>
     <li><a href="#manual-recovery">Manual Recovery</a></li>
     <li><a href="#rebootor">Teensy rebootor</a></li>
