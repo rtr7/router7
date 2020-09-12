@@ -471,3 +471,124 @@ func ipLines(args ...string) ([]string, error) {
 
 	return strings.Split(strings.TrimSpace(outstr), "\n"), nil
 }
+
+func TestDHCPv4OldAddressDeconfigured(t *testing.T) {
+	if os.Getenv("HELPER_PROCESS") == "1" {
+		tmp, err := ioutil.TempDir("", "router7")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmp)
+
+		for _, golden := range []struct {
+			filename, content string
+		}{
+			{"dhcp4/wire/lease.json", goldenDhcp4},
+			{"interfaces.json", goldenInterfaces},
+		} {
+			if err := os.MkdirAll(filepath.Join(tmp, filepath.Dir(golden.filename)), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := ioutil.WriteFile(filepath.Join(tmp, golden.filename), []byte(golden.content), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := os.MkdirAll(filepath.Join(tmp, "root", "etc"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.MkdirAll(filepath.Join(tmp, "root", "tmp"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
+			t.Fatalf("netconfig.Apply: %v", err)
+		}
+
+		const anotherDhcp4 = `
+{
+  "valid_until":"2018-05-18T23:46:04.429895261+02:00",
+  "client_ip":"85.195.199.99",
+  "subnet_mask":"255.255.255.128",
+  "router":"85.195.199.1",
+  "dns":[
+    "77.109.128.2",
+    "213.144.129.20"
+  ]
+}
+`
+		if err := ioutil.WriteFile(filepath.Join(tmp, "dhcp4/wire/lease.json"), []byte(anotherDhcp4), 0600); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
+			t.Fatalf("netconfig.Apply: %v", err)
+		}
+
+		return
+	}
+	const ns = "ns5" // name of the network namespace to use for this test
+
+	add := exec.Command("ip", "netns", "add", ns)
+	add.Stderr = os.Stderr
+	if err := add.Run(); err != nil {
+		t.Fatalf("%v: %v", add.Args, err)
+	}
+	defer exec.Command("ip", "netns", "delete", ns).Run()
+
+	nsSetup := []*exec.Cmd{
+		exec.Command("ip", "-netns", ns, "link", "add", "dummy0", "type", "dummy"),
+		exec.Command("ip", "-netns", ns, "link", "add", "lan0", "type", "dummy"),
+		exec.Command("ip", "-netns", ns, "link", "set", "dummy0", "address", "02:73:53:00:ca:fe"),
+		exec.Command("ip", "-netns", ns, "link", "set", "lan0", "address", "02:73:53:00:b0:0c"),
+	}
+
+	for _, cmd := range nsSetup {
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("%v: %v", cmd.Args, err)
+		}
+	}
+
+	cmd := exec.Command("ip", "netns", "exec", ns, os.Args[0], "-test.run=^TestDHCPv4OldAddressDeconfigured$")
+	cmd.Env = append(os.Environ(), "HELPER_PROCESS=1")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("VerifyAddresses", func(t *testing.T) {
+		show := exec.Command("ip", "-netns", ns, "address", "show", "dev", "uplink0")
+		show.Stderr = os.Stderr
+		addrs, err := show.Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		oldAddrRe := regexp.MustCompile(`(?m)^\s*inet 85.195.207.62/25 brd 85.195.207.127 scope global uplink0$`)
+		if oldAddrRe.MatchString(string(addrs)) {
+			t.Fatalf("regexp %s unexpectedly still matches %s", oldAddrRe, string(addrs))
+		}
+
+		addrRe := regexp.MustCompile(`(?m)^\s*inet 85.195.199.99/25 brd 85.195.199.127 scope global uplink0$`)
+		if !addrRe.MatchString(string(addrs)) {
+			t.Fatalf("regexp %s does not match %s", addrRe, string(addrs))
+		}
+
+		wantRoutes := []string{
+			"default via 85.195.199.1 proto dhcp src 85.195.199.99 ",
+			"85.195.199.0/25 proto kernel scope link src 85.195.199.99 ",
+			"85.195.199.1 proto dhcp scope link src 85.195.199.99",
+		}
+
+		routes, err := ipLines("-netns", ns, "route", "show", "dev", "uplink0")
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if diff := cmp.Diff(wantRoutes, routes); diff != "" {
+			t.Fatalf("routes: diff (-want +got):\n%s", diff)
+		}
+	})
+}

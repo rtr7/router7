@@ -72,7 +72,8 @@ func applyDhcp4(dir string) error {
 		return err
 	}
 
-	link, err := netlink.LinkByName("uplink0")
+	const linkName = "uplink0"
+	link, err := netlink.LinkByName(linkName)
 	if err != nil {
 		return err
 	}
@@ -86,7 +87,8 @@ func applyDhcp4(dir string) error {
 		return err
 	}
 
-	addr, err := netlink.ParseAddr(fmt.Sprintf("%s/%d", got.ClientIP, subnetSize))
+	gotAddr := fmt.Sprintf("%s/%d", got.ClientIP, subnetSize)
+	addr, err := netlink.ParseAddr(gotAddr)
 	if err != nil {
 		return err
 	}
@@ -96,8 +98,24 @@ func applyDhcp4(dir string) error {
 		return fmt.Errorf("netlink.NewHandle: %v", err)
 	}
 	defer h.Delete()
+	log.Printf("replacing address %v on %v", addr, linkName)
 	if err := h.AddrReplace(link, addr); err != nil {
-		return fmt.Errorf("AddrReplace(%v): %v", addr, err)
+		return fmt.Errorf("AddrReplace(%v, %v): %v", linkName, addr, err)
+	}
+
+	addrs, err := h.AddrList(link, netlink.FAMILY_V4)
+	if err != nil {
+		return fmt.Errorf("AddrList(%v): %v", linkName, err)
+	}
+	for _, addr := range addrs {
+		ipnet := addr.IPNet.String() // e.g. "85.195.199.99/25"
+		if ipnet == gotAddr {
+			continue
+		}
+		log.Printf("de-configuring old IP address %s from %v", ipnet, linkName)
+		if err := h.AddrDel(link, &addr); err != nil {
+			return fmt.Errorf("AddrDel(%v, %v): %v", linkName, addr, err)
+		}
 	}
 
 	// from include/uapi/linux/rtnetlink.h
