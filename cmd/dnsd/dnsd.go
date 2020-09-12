@@ -38,17 +38,18 @@ import (
 )
 
 var (
-	httpListeners = multilisten.NewPool()
-	dnsListeners  = multilisten.NewPool()
+	httpListeners   = multilisten.NewPool()
+	dnsUDPListeners = multilisten.NewPool()
+	dnsTCPListeners = multilisten.NewPool()
 )
 
 func updateListeners(mux *miekgdns.ServeMux) error {
-	hosts, err := gokrazy.PrivateInterfaceAddrs()
+	privateAddrs, err := gokrazy.PrivateInterfaceAddrs()
 	if err != nil {
 		return err
 	}
 
-	dnsListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+	dnsUDPListeners.ListenAndServe(privateAddrs, func(host string) multilisten.Listener {
 		return &listenerAdapter{&miekgdns.Server{
 			Addr:    net.JoinHostPort(host, "53"),
 			Net:     "udp",
@@ -56,11 +57,19 @@ func updateListeners(mux *miekgdns.ServeMux) error {
 		}}
 	})
 
+	dnsTCPListeners.ListenAndServe(privateAddrs, func(host string) multilisten.Listener {
+		return &listenerAdapter{&miekgdns.Server{
+			Addr:    net.JoinHostPort(host, "53"),
+			Net:     "tcp",
+			Handler: mux,
+		}}
+	})
+
 	if net1, err := multilisten.IPv6Net1("/perm"); err == nil {
-		hosts = append(hosts, net1)
+		privateAddrs = append(privateAddrs, net1)
 	}
 
-	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+	httpListeners.ListenAndServe(privateAddrs, func(host string) multilisten.Listener {
 		return &http.Server{Addr: net.JoinHostPort(host, "8053")}
 	})
 
