@@ -73,6 +73,7 @@ func (d *ping4gw) Evaluate() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer p.Close()
 	rtt, err := p.Ping(addr, timeout)
 	if err != nil {
 		return "", err
@@ -115,6 +116,7 @@ func (d *ping4) Evaluate() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer p.Close()
 	rtt, err := p.Ping(addr, timeout)
 	if err != nil {
 		return "", err
@@ -177,6 +179,7 @@ func (d *ping6gw) Evaluate() (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("ping.New(::): %v", err)
 	}
+	defer p.Close()
 	rtt, err := p.Ping(addr, timeout)
 	if err != nil {
 		return "", fmt.Errorf("ping6(%v, %v): %v", addr, timeout, err)
@@ -251,6 +254,7 @@ func (d *ping6) Evaluate() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	defer p.Close()
 	ctx, canc := context.WithTimeout(context.Background(), timeout)
 	defer canc()
 	if strings.HasPrefix(addr.String(), "ff02::") {
