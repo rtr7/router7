@@ -60,6 +60,7 @@ func healthy() error {
 	if err != nil {
 		return err
 	}
+	defer resp.Body.Close()
 	if got, want := resp.StatusCode, http.StatusOK; got != want {
 		b, _ := ioutil.ReadAll(resp.Body)
 		return fmt.Errorf("%v: got HTTP %v (%s), want HTTP status %v",
