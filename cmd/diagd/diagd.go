@@ -79,10 +79,16 @@ func firstError(re *diag.EvalResult) string {
 }
 
 func logic() error {
+	var (
+		ifname = flag.String("interface",
+			"uplink0",
+			"interface name to query")
+	)
 	const (
-		uplink        = "uplink0" /* enp0s31f6 */
 		ip6allrouters = "ff02::2" // no /etc/hosts on gokrazy
 	)
+	flag.Parse()
+	uplink := *ifname
 	m := diag.NewMonitor(diag.Link(uplink).
 		Then(diag.DHCPv4().
 			Then(diag.Ping4Gateway().
@@ -133,8 +139,6 @@ func logic() error {
 }
 
 func main() {
-	flag.Parse()
-
 	if err := logic(); err != nil {
 		log.Fatal(err)
 	}
