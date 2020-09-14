@@ -278,6 +278,11 @@ func (d *ping6) Evaluate() (string, error) {
 			if localAddr[reply.Address.String()] {
 				continue
 			}
+			go func() {
+				for range replies {
+					// drain channel
+				}
+			}()
 			return formatRTT(reply.Duration) + " from " + reply.Address.String(), nil
 		}
 		return "", fmt.Errorf("no responses to %s within %v", addr, timeout)
