@@ -34,6 +34,8 @@ import (
 
 	"github.com/rtr7/router7/internal/diag"
 	"github.com/rtr7/router7/internal/multilisten"
+
+	_ "net/http/pprof"
 )
 
 var httpListeners = multilisten.NewPool()
