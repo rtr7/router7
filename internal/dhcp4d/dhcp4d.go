@@ -89,13 +89,17 @@ func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.Pac
 	copy(start, serverIP)
 	start[len(start)-1] += 1
 	return &Handler{
-		rawConn:     conn,
-		iface:       iface,
-		leasesHW:    make(map[string]int),
-		leasesIP:    make(map[int]*Lease),
-		serverIP:    serverIP,
-		start:       start,
-		leaseRange:  230,
+		rawConn:    conn,
+		iface:      iface,
+		leasesHW:   make(map[string]int),
+		leasesIP:   make(map[int]*Lease),
+		serverIP:   serverIP,
+		start:      start,
+		leaseRange: 230,
+		// Apple recommends a DHCP lease time of 1 hour in
+		// https://support.apple.com/de-ch/HT202068,
+		// so if 20 minutes ever causes any trouble,
+		// we should try increasing it to 1 hour.
 		LeasePeriod: 20 * time.Minute,
 		options: dhcp4.Options{
 			dhcp4.OptionSubnetMask:       []byte{255, 255, 255, 0},
