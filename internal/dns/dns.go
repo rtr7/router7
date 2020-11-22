@@ -428,7 +428,10 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 		if idx > 0 {
 			// re-order this upstream to the front of s.upstream.
 			s.upstreamMu.Lock()
-			s.upstream = append(append([]string{u}, s.upstream[:idx]...), s.upstream[idx+1:]...)
+			// if the upstreams were reordered in the meantime leave them alone
+			if s.upstream[idx] == u {
+				s.upstream = append(append([]string{u}, s.upstream[:idx]...), s.upstream[idx+1:]...)
+			}
 			s.upstreamMu.Unlock()
 		}
 		return
