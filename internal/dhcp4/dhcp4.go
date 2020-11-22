@@ -44,6 +44,7 @@ type Client struct {
 
 	err          error
 	once         sync.Once
+	onceErr      error
 	connection   net.PacketConn
 	hardwareAddr net.HardwareAddr
 	hostname     string
@@ -84,7 +85,6 @@ var errNAK = errors.New("received DHCPNAK")
 
 // ObtainOrRenew returns false when encountering a permanent error.
 func (c *Client) ObtainOrRenew() bool {
-	var onceErr error
 	c.once.Do(func() {
 		if c.timeNow == nil {
 			c.timeNow = time.Now
@@ -94,13 +94,13 @@ func (c *Client) ObtainOrRenew() bool {
 				LinuxSockDGRAM: true,
 			})
 			if err != nil {
-				onceErr = err
+				c.onceErr = err
 				return
 			}
 			c.connection = conn
 		}
 		if c.connection == nil && c.Interface == nil {
-			onceErr = fmt.Errorf("c.Interface is nil")
+			c.onceErr = fmt.Errorf("c.Interface is nil")
 			return
 		}
 		if c.hardwareAddr == nil && c.HWAddr != nil {
@@ -115,14 +115,14 @@ func (c *Client) ObtainOrRenew() bool {
 		if c.hostname == "" {
 			var utsname unix.Utsname
 			if err := unix.Uname(&utsname); err != nil {
-				onceErr = err
+				c.onceErr = err
 				return
 			}
 			c.hostname = string(utsname.Nodename[:bytes.IndexByte(utsname.Nodename[:], 0)])
 		}
 	})
-	if onceErr != nil {
-		c.err = onceErr
+	if c.onceErr != nil {
+		c.err = c.onceErr
 		return false // permanent error
 	}
 	c.err = nil // clear previous error
