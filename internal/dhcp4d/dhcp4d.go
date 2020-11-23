@@ -18,6 +18,7 @@ package dhcp4d
 import (
 	"bytes"
 	"encoding/hex"
+	"fmt"
 	"log"
 	"math/rand"
 	"net"
@@ -137,14 +138,18 @@ func (h *Handler) callLeasesLocked(lease *Lease) {
 	h.Leases(leases, lease)
 }
 
-func (h *Handler) SetHostname(hwaddr, hostname string) {
+func (h *Handler) SetHostname(hwaddr, hostname string) error {
 	h.leasesMu.Lock()
 	defer h.leasesMu.Unlock()
 	leaseNum := h.leasesHW[hwaddr]
 	lease := h.leasesIP[leaseNum]
+	if lease.HardwareAddr != hwaddr || lease.Expired(h.timeNow()) {
+		return fmt.Errorf("hwaddr %v does not have a valid lease", hwaddr)
+	}
 	lease.Hostname = hostname
 	lease.HostnameOverride = hostname
 	h.callLeasesLocked(lease)
+	return nil
 }
 
 func (h *Handler) findLease() int {

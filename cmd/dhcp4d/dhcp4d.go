@@ -279,7 +279,10 @@ func newSrv(permDir string) (*srv, error) {
 			http.Error(w, "missing hostname parameter", http.StatusBadRequest)
 			return
 		}
-		handler.SetHostname(hwaddr, hostname)
+		if err := handler.SetHostname(hwaddr, hostname); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
 		http.Redirect(w, r, "/", http.StatusFound)
 	})
 
