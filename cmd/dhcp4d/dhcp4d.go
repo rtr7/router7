@@ -234,6 +234,8 @@ type srv struct {
 }
 
 func newSrv(permDir string) (*srv, error) {
+	mayqtt := MQTT()
+
 	http.Handle("/metrics", promhttp.Handler())
 	if err := updateListeners(); err != nil {
 		return nil, err
@@ -398,6 +400,30 @@ func newSrv(permDir string) (*srv, error) {
 		updateNonExpired(leases)
 		if err := notify.Process("/user/dnsd", syscall.SIGUSR1); err != nil {
 			log.Printf("notifying dnsd: %v", err)
+		}
+
+		// Publish the DHCP lease as JSON to MQTT, if configured:
+		leaseVal := struct {
+			Addr         string    `json:"addr"`
+			HardwareAddr string    `json:"hardware_addr"`
+			Expiration   time.Time `json:"expiration"`
+		}{
+			Addr:         latest.Addr.String(),
+			HardwareAddr: latest.HardwareAddr,
+			Expiration:   latest.Expiry.In(time.UTC),
+		}
+		leaseJSON, err := json.Marshal(leaseVal)
+		if err != nil {
+			log.Fatal(err)
+		}
+		identifier := latest.Hostname
+		if identifier == "" {
+			identifier = latest.HardwareAddr
+		}
+		mayqtt <- PublishRequest{
+			Topic:    "router7/dhcp4d/lease/" + identifier,
+			Retained: true,
+			Payload:  leaseJSON,
 		}
 	}
 	conn, err := conn.NewUDP4BoundListener(*iface, ":67")

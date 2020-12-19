@@ -7,6 +7,7 @@ require (
 	github.com/digineo/go-ping v1.0.0
 	github.com/gokrazy/breakglass v0.0.0-20200527163858-efff2172eebe // indirect
 	github.com/gokrazy/gdns v0.0.0-20200218203540-6b3b6244ea39 // indirect
+	github.com/eclipse/paho.mqtt.golang v1.2.0
 	github.com/gokrazy/gokrazy v0.0.0-20201006151115-caded4667633
 	github.com/gokrazy/internal v0.0.0-20200713084155-ab6fc6e02a03 // indirect
 	github.com/gokrazy/timestamps v0.0.0-20200713073712-54fdc319126e // indirect
