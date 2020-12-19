@@ -11,7 +11,7 @@ ifndef DIR
 	@echo variable DIR unset
 	false
 endif
-	go install github.com/gokrazy/tools/cmd/gokr-packer
+	go install github.com/gokrazy/tools/cmd/gokr-packer@latest
 	GOARCH=amd64 gokr-packer \
 		-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp,github.com/gokrazy/gokrazy/cmd/randomd \
 		-kernel_package=github.com/rtr7/kernel \
@@ -26,8 +26,8 @@ endif
 
 recover: #test
 	go install \
-		github.com/gokrazy/tools/cmd/gokr-packer \
-		github.com/rtr7/tools/cmd/rtr7-recover
+		github.com/gokrazy/tools/cmd/gokr-packer@lastet \
+		github.com/rtr7/tools/cmd/rtr7-recover@latest
 	GOARCH=amd64 gokr-packer \
 		-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp,github.com/gokrazy/gokrazy/cmd/randomd \
 		-kernel_package=github.com/rtr7/kernel \
@@ -61,7 +61,7 @@ strace:
 	(cd /tmp && go test -c router7) && ${SUDO} strace -f -o /tmp/st -s 2048 /tmp/router7.test -test.v #-test.race
 
 update:
-	rtr7-safe-update -build_command='make -C ~/router7 image DIR=$GOKR_DIR'
+	rtr7-safe-update -build_command='make -C ~/go/src/github.com/rtr7/router7 image DIR=$$GOKR_DIR'
 
 # sudo ip link add link enp0s31f6 name macvtap0 type macvtap
 # sudo ip link set macvtap0 address 52:55:00:d1:55:03 up
