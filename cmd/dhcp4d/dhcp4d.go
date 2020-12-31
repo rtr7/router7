@@ -420,10 +420,16 @@ func newSrv(permDir string) (*srv, error) {
 		if identifier == "" {
 			identifier = latest.HardwareAddr
 		}
-		mayqtt <- PublishRequest{
+		select {
+		case mayqtt <- PublishRequest{
 			Topic:    "router7/dhcp4d/lease/" + identifier,
 			Retained: true,
 			Payload:  leaseJSON,
+		}:
+		default:
+			// Channel not ready? skip publishing this lease (best-effort).
+			// This is an easy way of breaking circular dependencies between
+			// MQTT broker and DHCP server, and avoiding deadlocks.
 		}
 	}
 	conn, err := conn.NewUDP4BoundListener(*iface, ":67")
