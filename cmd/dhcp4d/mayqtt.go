@@ -30,6 +30,7 @@ func publisherLoop(requests <-chan PublishRequest) error {
 	log.Printf("Connecting to MQTT broker %q (configured in %s)", broker, configFn)
 	opts := mqtt.NewClientOptions().AddBroker(broker)
 	opts.SetClientID("dhcp4d")
+	opts.SetConnectRetry(true)
 	mqttClient := mqtt.NewClient(opts)
 	if token := mqttClient.Connect(); token.Wait() && token.Error() != nil {
 		return fmt.Errorf("MQTT connection failed: %v", token.Error())
