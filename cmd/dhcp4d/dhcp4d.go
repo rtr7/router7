@@ -416,7 +416,9 @@ func newSrv(permDir string) (*srv, error) {
 		if err != nil {
 			log.Fatal(err)
 		}
-		identifier := latest.Hostname
+		// MQTT requires valid UTF-8 and some brokers don’t cope well with
+		// invalid UTF-8: https://github.com/fhmq/hmq/issues/104
+		identifier := strings.ToValidUTF8(latest.Hostname, "")
 		if identifier == "" {
 			identifier = latest.HardwareAddr
 		}
