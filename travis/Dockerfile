@@ -12,7 +12,7 @@ RUN echo 'APT::Acquire::Retries "5";' > /etc/apt/apt.conf.d/80retry
 
 RUN apt-get update && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-    dnsmasq ndisc6 nftables dnsutils strace wireguard && \
+    dnsmasq ndisc6 nftables dnsutils strace wireguard iproute2 && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /usr/src
