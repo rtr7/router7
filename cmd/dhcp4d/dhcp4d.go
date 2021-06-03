@@ -34,6 +34,7 @@ import (
 	"sync"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/gokrazy/gokrazy"
 	"github.com/google/renameio"
@@ -419,6 +420,15 @@ func newSrv(permDir string) (*srv, error) {
 		// MQTT requires valid UTF-8 and some brokers don’t cope well with
 		// invalid UTF-8: https://github.com/fhmq/hmq/issues/104
 		identifier := strings.ToValidUTF8(latest.Hostname, "")
+		// Some MQTT clients (e.g. mosquitto_pub) don’t cope well with topic
+		// names containing non-printable characters (see also
+		// https://twitter.com/zekjur/status/1347295676909158400):
+		identifier = strings.Map(func(r rune) rune {
+			if unicode.IsPrint(r) {
+				return r
+			}
+			return -1
+		}, identifier)
 		if identifier == "" {
 			identifier = latest.HardwareAddr
 		}
