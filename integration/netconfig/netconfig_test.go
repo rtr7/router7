@@ -458,6 +458,131 @@ peer: AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=
 	})
 }
 
+const goldenInterfacesBridges = `
+{
+  "bridges":[
+    {
+      "name": "lan0",
+      "interface_hardware_addrs": ["02:73:53:00:b0:0c"]
+    }
+  ],
+  "interfaces":[
+    {
+      "hardware_addr": "02:73:53:00:ca:fe",
+      "name": "uplink0"
+    },
+    {
+      "spoof_hardware_addr": "02:73:53:00:b0:aa",
+      "name": "lan0",
+      "addr": "192.168.42.1/24"
+    }
+  ]
+}
+`
+
+func TestNetconfigBridges(t *testing.T) {
+	if os.Getenv("HELPER_PROCESS") == "1" {
+		tmp, err := ioutil.TempDir("", "router7")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer os.RemoveAll(tmp)
+
+		for _, golden := range []struct {
+			filename, content string
+		}{
+			{"interfaces.json", goldenInterfacesBridges},
+		} {
+			if err := os.MkdirAll(filepath.Join(tmp, filepath.Dir(golden.filename)), 0755); err != nil {
+				t.Fatal(err)
+			}
+			if err := ioutil.WriteFile(filepath.Join(tmp, golden.filename), []byte(golden.content), 0600); err != nil {
+				t.Fatal(err)
+			}
+		}
+
+		if err := os.MkdirAll(filepath.Join(tmp, "root", "etc"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		if err := os.MkdirAll(filepath.Join(tmp, "root", "tmp"), 0755); err != nil {
+			t.Fatal(err)
+		}
+
+		netconfig.DefaultCounterObj = &nftables.CounterObj{Packets: 23, Bytes: 42}
+		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
+			t.Fatalf("netconfig.Apply: %v", err)
+		}
+
+		// Apply twice to ensure the absence of errors when dealing with
+		// already-configured interfaces, addresses, routes, … (and ensure
+		// nftables rules are replaced, not appendend to).
+		netconfig.DefaultCounterObj = &nftables.CounterObj{Packets: 0, Bytes: 0}
+		if err := netconfig.Apply(tmp, filepath.Join(tmp, "root")); err != nil {
+			t.Fatalf("netconfig.Apply: %v", err)
+		}
+
+		return
+	}
+	const ns = "ns6" // name of the network namespace to use for this test
+
+	add := exec.Command("ip", "netns", "add", ns)
+	add.Stderr = os.Stderr
+	if err := add.Run(); err != nil {
+		t.Fatalf("%v: %v", add.Args, err)
+	}
+	defer exec.Command("ip", "netns", "delete", ns).Run()
+
+	nsSetup := []*exec.Cmd{
+		exec.Command("ip", "-netns", ns, "link", "add", "dummy0", "type", "dummy"),
+		exec.Command("ip", "-netns", ns, "link", "add", "eth0", "type", "dummy"),
+		exec.Command("ip", "-netns", ns, "link", "set", "dummy0", "address", "02:73:53:00:ca:fe"),
+		exec.Command("ip", "-netns", ns, "link", "set", "eth0", "address", "02:73:53:00:b0:0c"),
+	}
+
+	for _, cmd := range nsSetup {
+		if err := cmd.Run(); err != nil {
+			t.Fatalf("%v: %v", cmd.Args, err)
+		}
+	}
+
+	cmd := exec.Command("ip", "netns", "exec", ns, os.Args[0], "-test.run=^TestNetconfigBridges")
+	cmd.Env = append(os.Environ(), "HELPER_PROCESS=1")
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		t.Fatal(err)
+	}
+
+	t.Run("VerifyAddresses", func(t *testing.T) {
+		link, err := exec.Command("ip", "-netns", ns, "link", "show", "dev", "lan0", "type", "bridge").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(link), "link/ether 02:73:53:00:b0:aa") {
+			t.Errorf("lan0 MAC address is not 02:73:53:00:b0:aa")
+		}
+
+		addrs, err := exec.Command("ip", "-netns", ns, "address", "show", "dev", "lan0").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		addrRe := regexp.MustCompile(`(?m)^\s*inet 192.168.42.1/24 brd 192.168.42.255 scope global lan0`)
+		if !addrRe.MatchString(string(addrs)) {
+			t.Fatalf("regexp %s does not match %s", addrRe, string(addrs))
+		}
+
+		bridgeLinks, err := exec.Command("ip", "-netns", ns, "link", "show", "master", "lan0").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(bridgeLinks), ": eth0: ") {
+			t.Errorf("lan0 bridge does not contain eth0 interface")
+		}
+	})
+}
+
 func ipLines(args ...string) ([]string, error) {
 	cmd := exec.Command("ip", args...)
 	out, err := cmd.Output()

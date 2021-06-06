@@ -198,8 +198,14 @@ type InterfaceDetails struct {
 	Addr              string `json:"addr"`                // e.g. 192.168.42.1/24
 }
 
+type BridgeDetails struct {
+	Name                   string   `json:"name"` // e.g. br0 or lan0
+	InterfaceHardwareAddrs []string `json:"interface_hardware_addrs"`
+}
+
 type InterfaceConfig struct {
 	Interfaces []InterfaceDetails `json:"interfaces"`
+	Bridges    []BridgeDetails    `json:"bridges"`
 }
 
 // Interface returns the InterfaceDetails configured for interface ifname in
@@ -255,6 +261,56 @@ func applyInterfaces(dir, root string) error {
 		}
 		byName[details.Name] = details
 	}
+
+	for _, bridge := range cfg.Bridges {
+		if _, err := netlink.LinkByName(bridge.Name); err != nil {
+			link := &netlink.Bridge{LinkAttrs: netlink.LinkAttrs{Name: bridge.Name}}
+			if err := netlink.LinkAdd(link); err != nil {
+				return fmt.Errorf("netlink.LinkAdd: %v", err)
+			}
+		}
+		interfaces := make(map[string]bool)
+		for _, hwaddr := range bridge.InterfaceHardwareAddrs {
+			interfaces[hwaddr] = true
+		}
+		bridgeLink, err := netlink.LinkByName(bridge.Name)
+		if err != nil {
+			return fmt.Errorf("LinkByName(%s): %v", bridge.Name, err)
+		}
+
+		links, err := netlink.LinkList()
+		if err != nil {
+			return err
+		}
+		for _, l := range links {
+			attr := l.Attrs()
+			addr := attr.HardwareAddr.String()
+			if addr == "" {
+				continue
+			}
+			if !interfaces[addr] {
+				continue
+			}
+			log.Printf("adding interface %s to bridge %s", attr.Name, bridge.Name)
+			if err := netlink.LinkSetMaster(l, bridgeLink); err != nil {
+				return fmt.Errorf("LinkSetMaster(%s): %v", attr.Name, err)
+			}
+			if attr.OperState != netlink.OperUp {
+				log.Printf("setting interface %s up", attr.Name)
+				if err := netlink.LinkSetUp(l); err != nil {
+					return fmt.Errorf("LinkSetUp(%s): %v", attr.Name, err)
+				}
+			}
+
+		}
+		if attr := bridgeLink.Attrs(); attr.OperState != netlink.OperUp {
+			log.Printf("setting interface %s up", attr.Name)
+			if err := netlink.LinkSetUp(bridgeLink); err != nil {
+				return fmt.Errorf("LinkSetUp(%s): %v", attr.Name, err)
+			}
+		}
+	}
+
 	links, err := netlink.LinkList()
 	if err != nil {
 		return err
@@ -276,6 +332,9 @@ func applyInterfaces(dir, root string) error {
 			}
 		} else {
 			details, ok = byHardwareAddr[addr]
+			if !ok {
+				details, ok = byName[attr.Name]
+			}
 		}
 		if !ok {
 			log.Printf("no config for interface %s/%s", attr.Name, addr)
