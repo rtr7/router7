@@ -271,6 +271,11 @@ func applyBridges(cfg *InterfaceConfig) error {
 			if !interfaces[addr] {
 				continue
 			}
+			if attr.Name == bridge.Name {
+				// Don’t try to add the bridge to itself: the bridge will take
+				// the MAC address of the first interface.
+				continue
+			}
 			log.Printf("adding interface %s to bridge %s", attr.Name, bridge.Name)
 			if err := netlink.LinkSetMaster(l, bridgeLink); err != nil {
 				return fmt.Errorf("LinkSetMaster(%s): %v", attr.Name, err)
