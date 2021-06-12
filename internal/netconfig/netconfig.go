@@ -240,30 +240,10 @@ func LinkAddress(dir, ifname string) (net.IP, error) {
 	return ip, err
 }
 
-func applyInterfaces(dir, root string) error {
-	b, err := ioutil.ReadFile(filepath.Join(dir, "interfaces.json"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	var cfg InterfaceConfig
-	if err := json.Unmarshal(b, &cfg); err != nil {
-		return err
-	}
-	byName := make(map[string]InterfaceDetails)
-	byHardwareAddr := make(map[string]InterfaceDetails)
-	for _, details := range cfg.Interfaces {
-		byHardwareAddr[details.HardwareAddr] = details
-		if spoof := details.SpoofHardwareAddr; spoof != "" {
-			byHardwareAddr[spoof] = details
-		}
-		byName[details.Name] = details
-	}
-
+func applyBridges(cfg *InterfaceConfig) error {
 	for _, bridge := range cfg.Bridges {
 		if _, err := netlink.LinkByName(bridge.Name); err != nil {
+			log.Printf("creating bridge %s", bridge.Name)
 			link := &netlink.Bridge{LinkAttrs: netlink.LinkAttrs{Name: bridge.Name}}
 			if err := netlink.LinkAdd(link); err != nil {
 				return fmt.Errorf("netlink.LinkAdd: %v", err)
@@ -309,6 +289,34 @@ func applyInterfaces(dir, root string) error {
 				return fmt.Errorf("LinkSetUp(%s): %v", attr.Name, err)
 			}
 		}
+	}
+	return nil
+}
+
+func applyInterfaces(dir, root string) error {
+	b, err := ioutil.ReadFile(filepath.Join(dir, "interfaces.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	var cfg InterfaceConfig
+	if err := json.Unmarshal(b, &cfg); err != nil {
+		return err
+	}
+	byName := make(map[string]InterfaceDetails)
+	byHardwareAddr := make(map[string]InterfaceDetails)
+	for _, details := range cfg.Interfaces {
+		byHardwareAddr[details.HardwareAddr] = details
+		if spoof := details.SpoofHardwareAddr; spoof != "" {
+			byHardwareAddr[spoof] = details
+		}
+		byName[details.Name] = details
+	}
+
+	if err := applyBridges(&cfg); err != nil {
+		log.Printf("applyBridges: %v", err)
 	}
 
 	links, err := netlink.LinkList()
