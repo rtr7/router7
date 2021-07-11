@@ -10,7 +10,7 @@ menu:
 
 router7 is a pure-Go implementation of a small home internet router. It comes with all the services required to make a [fiber7 internet connection](https://www.init7.net/en/internet/fiber7/) work (DHCPv4, DHCPv6, DNS, etc.).
 
-Note that this project should be considered a (working!) tech demo. Feature requests will likely not be implemented, and see [CONTRIBUTING.md](CONTRIBUTING.md) for details about which contributions are welcome.
+Note that this project should be considered a (working!) tech demo. Feature requests will likely not be implemented, and see [CONTRIBUTING.md](https://github.com/rtr7/router7/blob/master/CONTRIBUTING.md) for details about which contributions are welcome.
 
 ## Motivation
 
