@@ -46,6 +46,9 @@ func Archive(w io.Writer, dir string) error {
 		if path == dir {
 			return nil // skip root
 		}
+		if last := filepath.Base(path); last == "nobackup" || last == "srv" {
+			return filepath.SkipDir // skip nobackup (and srv for legacy)
+		}
 		rel, err := filepath.Rel(dir, path)
 		if err != nil {
 			return err
