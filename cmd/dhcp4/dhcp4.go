@@ -53,7 +53,7 @@ func healthy() error {
 	if err != nil {
 		return err
 	}
-	ctx, canc := context.WithTimeout(context.Background(), 5*time.Second)
+	ctx, canc := context.WithTimeout(context.Background(), 30*time.Second)
 	defer canc()
 	req = req.WithContext(ctx)
 	resp, err := http.DefaultClient.Do(req)
@@ -179,7 +179,7 @@ ObtainOrRenew:
 				} else {
 					unhealthyCycles++
 					log.Printf("router unhealthy (cycle %d of 5): %v", unhealthyCycles, err)
-					if unhealthyCycles < 5 {
+					if unhealthyCycles < 20 {
 						continue // wait until unhealthy for longer
 					}
 					// fallthrough
