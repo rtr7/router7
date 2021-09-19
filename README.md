@@ -1,6 +1,6 @@
 # router7
 
-[![Build Status](https://travis-ci.org/rtr7/router7.svg?branch=master)](https://travis-ci.org/rtr7/router7)
+[![GitHub Actions CI](https://github.com/rtr7/router7/actions/workflows/go.yml/badge.svg)](https://github.com/rtr7/router7/actions/workflows/go.yml)
 [![GoDoc](https://godoc.org/github.com/rtr7/router7/cmd?status.svg)](https://godoc.org/github.com/rtr7/router7/cmd)
 [![Go Report Card](https://goreportcard.com/badge/github.com/rtr7/router7)](https://goreportcard.com/report/github.com/rtr7/router7)
 
