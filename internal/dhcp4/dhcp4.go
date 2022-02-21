@@ -25,7 +25,7 @@ import (
 	"time"
 
 	"github.com/google/gopacket/layers"
-	"github.com/mdlayher/raw"
+	"github.com/mdlayher/packet"
 	"github.com/rtr7/dhcp4"
 	"golang.org/x/sys/unix"
 )
@@ -90,9 +90,7 @@ func (c *Client) ObtainOrRenew() bool {
 			c.timeNow = time.Now
 		}
 		if c.connection == nil && c.Interface != nil {
-			conn, err := raw.ListenPacket(c.Interface, syscall.ETH_P_IP, &raw.Config{
-				LinuxSockDGRAM: true,
-			})
+			conn, err := packet.Listen(c.Interface, packet.Datagram, syscall.ETH_P_IP, nil)
 			if err != nil {
 				c.onceErr = err
 				return

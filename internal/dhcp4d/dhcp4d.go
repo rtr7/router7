@@ -33,7 +33,7 @@ import (
 	"github.com/google/gopacket"
 	"github.com/google/gopacket/layers"
 	"github.com/krolaw/dhcp4"
-	"github.com/mdlayher/raw"
+	"github.com/mdlayher/packet"
 )
 
 type Lease struct {
@@ -80,7 +80,7 @@ func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.Pac
 		}
 	}
 	if conn == nil {
-		conn, err = raw.ListenPacket(iface, syscall.ETH_P_ALL, nil)
+		conn, err = packet.Listen(iface, packet.Raw, syscall.ETH_P_ALL, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -241,7 +241,7 @@ func (h *Handler) ServeDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		udp,
 		gopacket.Payload(reply))
 
-	if _, err := h.rawConn.WriteTo(buf.Bytes(), &raw.Addr{destMAC}); err != nil {
+	if _, err := h.rawConn.WriteTo(buf.Bytes(), &packet.Addr{HardwareAddr: destMAC}); err != nil {
 		log.Printf("WriteTo: %v", err)
 	}
 
