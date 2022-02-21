@@ -31,7 +31,7 @@ func messageType(p dhcp4.Packet) dhcp4.MessageType {
 	return dhcp4.MessageType(opts[dhcp4.OptionDHCPMessageType][0])
 }
 
-func packet(mt dhcp4.MessageType, addr net.IP, hwaddr net.HardwareAddr, opts []dhcp4.Option) dhcp4.Packet {
+func newPacket(mt dhcp4.MessageType, addr net.IP, hwaddr net.HardwareAddr, opts []dhcp4.Option) dhcp4.Packet {
 	return dhcp4.RequestPacket(
 		mt,
 		hwaddr,                         // MAC address
@@ -43,15 +43,15 @@ func packet(mt dhcp4.MessageType, addr net.IP, hwaddr net.HardwareAddr, opts []d
 }
 
 func request(addr net.IP, hwaddr net.HardwareAddr, opts ...dhcp4.Option) dhcp4.Packet {
-	return packet(dhcp4.Request, addr, hwaddr, opts)
+	return newPacket(dhcp4.Request, addr, hwaddr, opts)
 }
 
 func discover(addr net.IP, hwaddr net.HardwareAddr, opts ...dhcp4.Option) dhcp4.Packet {
-	return packet(dhcp4.Discover, addr, hwaddr, opts)
+	return newPacket(dhcp4.Discover, addr, hwaddr, opts)
 }
 
 func decline(addr net.IP, hwaddr net.HardwareAddr, opts ...dhcp4.Option) dhcp4.Packet {
-	return packet(dhcp4.Decline, addr, hwaddr, opts)
+	return newPacket(dhcp4.Decline, addr, hwaddr, opts)
 }
 
 const goldenInterfaces = `
@@ -173,7 +173,7 @@ func TestPreferredAddress(t *testing.T) {
 	})
 
 	t.Run("requested option", func(t *testing.T) {
-		//p := request(net.IPv4zero, hardwareAddr)
+		// p := request(net.IPv4zero, hardwareAddr)
 		p := dhcp4.RequestPacket(
 			dhcp4.Discover,
 			hardwareAddr,                   // MAC address
@@ -215,7 +215,6 @@ func TestPoolBoundaries(t *testing.T) {
 			t.Errorf("DHCPREQUEST resulted in unexpected message type: got %v, want %v", got, want)
 		}
 	}
-
 }
 
 func TestPreviousLease(t *testing.T) {
@@ -465,7 +464,7 @@ func TestMinimumLeaseTime(t *testing.T) {
 	handler, cleanup := testHandler(t)
 	defer cleanup()
 
-	var addr = net.IP{192, 168, 42, 23}
+	addr := net.IP{192, 168, 42, 23}
 
 	for _, tt := range []struct {
 		hwaddr        net.HardwareAddr
