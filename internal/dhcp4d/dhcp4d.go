@@ -293,18 +293,18 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 		// try to offer the requested IP, if any and available
 		if !reqIP.To4().Equal(net.IPv4zero) {
 			free = h.canLease(reqIP, hwAddr)
-			//log.Printf("canLease(%v, %s) = %d", reqIP, hwAddr, free)
+			// log.Printf("canLease(%v, %s) = %d", reqIP, hwAddr, free)
 		}
 
 		// offer previous lease for this HardwareAddr, if any
 		if lease, ok := h.leaseHW(hwAddr); ok && !lease.Expired(h.timeNow()) {
 			free = lease.Num
-			//log.Printf("h.leasesHW[%s] = %d", hwAddr, free)
+			// log.Printf("h.leasesHW[%s] = %d", hwAddr, free)
 		}
 
 		if free == -1 {
 			free = h.findLease()
-			//log.Printf("findLease = %d", free)
+			// log.Printf("findLease = %d", free)
 		}
 
 		if free == -1 {
