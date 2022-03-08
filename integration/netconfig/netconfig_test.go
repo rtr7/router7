@@ -137,19 +137,20 @@ func goldenNftablesRules(additionalForwarding bool) string {
 	add := ""
 	if additionalForwarding {
 		add = `
-		iifname "uplink0" tcp dport 8045 dnat to 192.168.42.22:8045`
+		ip daddr != 127.0.0.0/8 ip daddr != 10.0.0.0/24 fib daddr type 2 tcp dport 8045 dnat to 192.168.42.22:8045`
 	}
 	return `table ip nat {
 	chain prerouting {
 		type nat hook prerouting priority 0; policy accept;
-		iifname "uplink0" tcp dport 8080 dnat to 192.168.42.23:9999` + add + `
-		iifname "uplink0" tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060
-		iifname "uplink0" udp dport 53 dnat to 192.168.42.99:53
+		ip daddr != 127.0.0.0/8 ip daddr != 10.0.0.0/24 fib daddr type 2 tcp dport 8080 dnat to 192.168.42.23:9999` + add + `
+		ip daddr != 127.0.0.0/8 ip daddr != 10.0.0.0/24 fib daddr type 2 tcp dport 8040-8060 dnat to 192.168.42.99:8040-8060
+		ip daddr != 127.0.0.0/8 ip daddr != 10.0.0.0/24 fib daddr type 2 udp dport 53 dnat to 192.168.42.99:53
 	}
 
 	chain postrouting {
 		type nat hook postrouting priority 100; policy accept;
 		oifname "uplink0" masquerade
+		iifname "lan0" oifname "lan0" ct status 0x20 masquerade
 	}
 }
 table ip filter {

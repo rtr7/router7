@@ -409,6 +409,73 @@ func nfifname(n string) []byte {
 	return b
 }
 
+// matchUplinkIP is conceptually equivalent to "ip daddr <uplink0-ip>", but
+// without actually using the IP address of the uplink0 interface (which would
+// mean that rules need to change when the IP address changes).
+//
+// Instead, it uses “fib daddr type local” to match all locally-configured IP
+// addresses and then excludes the loopback and LAN IP addresses.
+func matchUplinkIP() []expr.Any {
+	return []expr.Any{
+		// [ payload load 4b @ network header + 16 => reg 1 ]
+		&expr.Payload{
+			DestRegister: 1,
+			Base:         expr.PayloadBaseNetworkHeader,
+			Offset:       16, // TODO
+			Len:          4,  // TODO
+		},
+		// [ bitwise reg 1 = (reg=1 & 0x000000ff ) ^ 0x00000000 ]
+		&expr.Bitwise{
+			DestRegister:   1,
+			SourceRegister: 1,
+			Len:            4,
+			Mask:           []byte{0xff, 0x00, 0x00, 0x00}, // 255.0.0.0, i.e. /8
+			Xor:            []byte{0x00, 0x00, 0x00, 0x00},
+		},
+		// [ cmp neq reg 1 0x0000007f ]
+		&expr.Cmp{
+			Op:       expr.CmpOpNeq,
+			Register: 1,
+			Data:     []byte{0x7f, 0x00, 0x00, 0x00},
+		},
+
+		// [ payload load 4b @ network header + 16 => reg 1 ]
+		&expr.Payload{
+			DestRegister: 1,
+			Base:         expr.PayloadBaseNetworkHeader,
+			Offset:       16, // TODO
+			Len:          4,  // TODO
+		},
+		//  [ bitwise reg 1 = (reg=1 & 0x00ffffff ) ^ 0x00000000 ]
+		&expr.Bitwise{
+			DestRegister:   1,
+			SourceRegister: 1,
+			Len:            4,
+			Mask:           []byte{0xff, 0xff, 0xff, 0x00}, // 255.255.255.0, i.e. /24
+			Xor:            []byte{0x00, 0x00, 0x00, 0x00},
+		},
+		//  [ cmp neq reg 1 0x0000000a ]
+		&expr.Cmp{
+			Op:       expr.CmpOpNeq,
+			Register: 1,
+			Data:     []byte{0x0a, 0x00, 0x00, 0x00},
+		},
+
+		// [ fib daddr type => reg 1 ]
+		&expr.Fib{
+			Register:       1,
+			FlagDADDR:      true,
+			ResultADDRTYPE: true,
+		},
+		// [ cmp eq reg 1 0x00000002 ]
+		&expr.Cmp{
+			Op:       expr.CmpOpEq,
+			Register: 1,
+			Data:     []byte{0x02, 0x00, 0x00, 0x00},
+		},
+	}
+}
+
 func portForwardExpr(ifname string, proto uint8, portMin, portMax uint16, dest net.IP, dportMin, dportMax uint16) []expr.Any {
 	var cmp []expr.Any
 	if portMin == portMax {
@@ -436,16 +503,7 @@ func portForwardExpr(ifname string, proto uint8, portMin, portMax uint16, dest n
 			},
 		}
 	}
-	ex := []expr.Any{
-		// [ meta load iifname => reg 1 ]
-		&expr.Meta{Key: expr.MetaKeyIIFNAME, Register: 1},
-		// [ cmp eq reg 1 0x696c7075 0x00306b6e 0x00000000 0x00000000 ]
-		&expr.Cmp{
-			Op:       expr.CmpOpEq,
-			Register: 1,
-			Data:     nfifname(ifname),
-		},
-
+	ex := append(matchUplinkIP(),
 		// [ meta load l4proto => reg 1 ]
 		&expr.Meta{Key: expr.MetaKeyL4PROTO, Register: 1},
 		// [ cmp eq reg 1 0x00000006 ]
@@ -461,8 +519,7 @@ func portForwardExpr(ifname string, proto uint8, portMin, portMax uint16, dest n
 			Base:         expr.PayloadBaseTransportHeader,
 			Offset:       2, // TODO
 			Len:          2, // TODO
-		},
-	}
+		})
 	ex = append(ex, cmp...)
 	ex = append(ex,
 		// [ immediate reg 1 0x0217a8c0 ]
@@ -627,6 +684,52 @@ func getCounterObj(c *nftables.Conn, o *nftables.CounterObj) *nftables.CounterOb
 	return o
 }
 
+func hairpinDNAT() []expr.Any {
+	return []expr.Any{
+		// [ meta load oifname => reg 1 ]
+		&expr.Meta{Key: expr.MetaKeyIIFNAME, Register: 1},
+		// [ cmp eq reg 1 0x306e616c 0x00000000 0x00000000 0x00000000 ]
+		&expr.Cmp{
+			Op:       expr.CmpOpEq,
+			Register: 1,
+			Data:     nfifname("lan0"),
+		},
+
+		// [ meta load oifname => reg 1 ]
+		&expr.Meta{Key: expr.MetaKeyOIFNAME, Register: 1},
+		// [ cmp eq reg 1 0x306e616c 0x00000000 0x00000000 0x00000000 ]
+		&expr.Cmp{
+			Op:       expr.CmpOpEq,
+			Register: 1,
+			Data:     nfifname("lan0"),
+		},
+
+		// [ ct load status => reg 1 ]
+		&expr.Ct{
+			Register:       1,
+			SourceRegister: false,
+			Key:            expr.CtKeySTATUS,
+		},
+		// [ bitwise reg 1 = (reg=1 & 0x00000020 ) ^ 0x00000000 ]
+		&expr.Bitwise{
+			DestRegister:   1,
+			SourceRegister: 1,
+			Len:            4,
+			Mask:           []byte{0x20, 0x00, 0x00, 0x00},
+			Xor:            []byte{0x00, 0x00, 0x00, 0x00},
+		},
+
+		// [ cmp neq reg 1 0x00000000 ]
+		&expr.Cmp{
+			Op:       expr.CmpOpNeq,
+			Register: 1,
+			Data:     []byte{0x00, 0x00, 0x00, 0x00},
+		},
+		// [ masq ]
+		&expr.Masq{},
+	}
+}
+
 func applyFirewall(dir, ifname string) error {
 	c := &nftables.Conn{}
 
@@ -668,6 +771,12 @@ func applyFirewall(dir, ifname string) error {
 			// masq
 			&expr.Masq{},
 		},
+	})
+
+	c.AddRule(&nftables.Rule{
+		Table: nat,
+		Chain: postrouting,
+		Exprs: hairpinDNAT(),
 	})
 
 	if err := applyPortForwardings(dir, ifname, c, nat, prerouting); err != nil {
