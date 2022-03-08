@@ -44,6 +44,8 @@ var (
 
 func init() {
 	var c nftables.Conn
+	filter4 := &nftables.Table{Family: nftables.TableFamilyIPv4, Name: "filter"}
+	filter6 := &nftables.Table{Family: nftables.TableFamilyIPv6, Name: "filter"}
 	for _, metric := range []struct {
 		name           string
 		labels         prometheus.Labels
@@ -53,18 +55,34 @@ func init() {
 		{
 			name:   "filter_forward",
 			labels: prometheus.Labels{"family": "ipv4"},
-			obj: &nftables.CounterObj{
-				Table: &nftables.Table{Family: nftables.TableFamilyIPv4, Name: "filter"},
-				Name:  "fwded",
-			},
+			obj:    &nftables.CounterObj{Table: filter4, Name: "fwded"},
 		},
 		{
 			name:   "filter_forward",
 			labels: prometheus.Labels{"family": "ipv6"},
-			obj: &nftables.CounterObj{
-				Table: &nftables.Table{Family: nftables.TableFamilyIPv6, Name: "filter"},
-				Name:  "fwded",
-			},
+			obj:    &nftables.CounterObj{Table: filter6, Name: "fwded"},
+		},
+
+		{
+			name:   "filter_input",
+			labels: prometheus.Labels{"family": "ipv4"},
+			obj:    &nftables.CounterObj{Table: filter4, Name: "inputc"},
+		},
+		{
+			name:   "filter_input",
+			labels: prometheus.Labels{"family": "ipv6"},
+			obj:    &nftables.CounterObj{Table: filter6, Name: "inputc"},
+		},
+
+		{
+			name:   "filter_output",
+			labels: prometheus.Labels{"family": "ipv4"},
+			obj:    &nftables.CounterObj{Table: filter4, Name: "outputc"},
+		},
+		{
+			name:   "filter_output",
+			labels: prometheus.Labels{"family": "ipv6"},
+			obj:    &nftables.CounterObj{Table: filter6, Name: "outputc"},
 		},
 	} {
 		metric := metric // copy
@@ -72,12 +90,11 @@ func init() {
 		updateCounter := func() {
 			mu.Lock()
 			defer mu.Unlock()
-			objs, err := c.GetObjReset(metric.obj)
-			if err != nil ||
-				len(objs) != 1 {
+			obj, err := c.ResetObject(metric.obj)
+			if err != nil {
 				return
 			}
-			if co, ok := objs[0].(*nftables.CounterObj); ok {
+			if co, ok := obj.(*nftables.CounterObj); ok {
 				metric.packets += co.Packets
 				metric.bytes += co.Bytes
 			}

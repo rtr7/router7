@@ -158,14 +158,11 @@ table ip filter {
 		packets 23 bytes 42
 	}
 
-	chain forward {
-		type filter hook forward priority 0; policy accept;
-		oifname "uplink0" tcp flags 0x2 tcp option maxseg size set rt mtu
-		counter name "fwded"
+	counter inputc {
+		packets 23 bytes 42
 	}
-}
-table ip6 filter {
-	counter fwded {
+
+	counter outputc {
 		packets 23 bytes 42
 	}
 
@@ -173,6 +170,45 @@ table ip6 filter {
 		type filter hook forward priority 0; policy accept;
 		oifname "uplink0" tcp flags 0x2 tcp option maxseg size set rt mtu
 		counter name "fwded"
+	}
+
+	chain input {
+		type filter hook input priority 0; policy accept;
+		counter name "inputc"
+	}
+
+	chain output {
+		type filter hook output priority 0; policy accept;
+		counter name "outputc"
+	}
+}
+table ip6 filter {
+	counter fwded {
+		packets 23 bytes 42
+	}
+
+	counter inputc {
+		packets 23 bytes 42
+	}
+
+	counter outputc {
+		packets 23 bytes 42
+	}
+
+	chain forward {
+		type filter hook forward priority 0; policy accept;
+		oifname "uplink0" tcp flags 0x2 tcp option maxseg size set rt mtu
+		counter name "fwded"
+	}
+
+	chain input {
+		type filter hook input priority 0; policy accept;
+		counter name "inputc"
+	}
+
+	chain output {
+		type filter hook output priority 0; policy accept;
+		counter name "outputc"
 	}
 }`
 }

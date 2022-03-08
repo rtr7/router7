@@ -648,35 +648,13 @@ func applyPortForwardings(dir, ifname string, c *nftables.Conn, nat *nftables.Ta
 var DefaultCounterObj = &nftables.CounterObj{}
 
 func getCounterObj(c *nftables.Conn, o *nftables.CounterObj) *nftables.CounterObj {
-	objs, err := c.GetObj(o)
+	obj, err := c.GetObject(o)
 	if err != nil {
 		o.Bytes = DefaultCounterObj.Bytes
 		o.Packets = DefaultCounterObj.Packets
 		return o
 	}
-	{
-		// TODO: remove this workaround once travis has workers with a newer kernel
-		// than its current Ubuntu trusty kernel (Linux 4.4.0):
-		var filtered []nftables.Obj
-		for _, obj := range objs {
-			co, ok := obj.(*nftables.CounterObj)
-			if !ok {
-				continue
-			}
-			if co.Table.Name != o.Table.Name {
-				continue
-			}
-			filtered = append(filtered, obj)
-		}
-		objs = filtered
-	}
-	if got, want := len(objs), 1; got != want {
-		log.Printf("could not carry counter values: unexpected number of objects in table %v: got %d, want %d", o.Table.Name, got, want)
-		o.Bytes = DefaultCounterObj.Bytes
-		o.Packets = DefaultCounterObj.Packets
-		return o
-	}
-	if co, ok := objs[0].(*nftables.CounterObj); ok {
+	if co, ok := obj.(*nftables.CounterObj); ok {
 		return co
 	}
 	o.Bytes = DefaultCounterObj.Bytes
@@ -882,6 +860,56 @@ func applyFirewall(dir, ifname string) error {
 			Chain: forward,
 			Exprs: []expr.Any{
 				// [ counter name fwded ]
+				&expr.Objref{
+					Type: NFT_OBJECT_COUNTER,
+					Name: counter.Name,
+				},
+			},
+		})
+
+		input := c.AddChain(&nftables.Chain{
+			Name:     "input",
+			Hooknum:  nftables.ChainHookInput,
+			Priority: nftables.ChainPriorityFilter,
+			Table:    filter,
+			Type:     nftables.ChainTypeFilter,
+		})
+
+		counterObj = getCounterObj(c, &nftables.CounterObj{
+			Table: filter,
+			Name:  "inputc",
+		})
+		counter = c.AddObj(counterObj).(*nftables.CounterObj)
+		c.AddRule(&nftables.Rule{
+			Table: filter,
+			Chain: input,
+			Exprs: []expr.Any{
+				// [ counter name input ]
+				&expr.Objref{
+					Type: NFT_OBJECT_COUNTER,
+					Name: counter.Name,
+				},
+			},
+		})
+
+		output := c.AddChain(&nftables.Chain{
+			Name:     "output",
+			Hooknum:  nftables.ChainHookOutput,
+			Priority: nftables.ChainPriorityFilter,
+			Table:    filter,
+			Type:     nftables.ChainTypeFilter,
+		})
+
+		counterObj = getCounterObj(c, &nftables.CounterObj{
+			Table: filter,
+			Name:  "outputc",
+		})
+		counter = c.AddObj(counterObj).(*nftables.CounterObj)
+		c.AddRule(&nftables.Rule{
+			Table: filter,
+			Chain: output,
+			Exprs: []expr.Any{
+				// [ counter name output ]
 				&expr.Objref{
 					Type: NFT_OBJECT_COUNTER,
 					Name: counter.Name,
