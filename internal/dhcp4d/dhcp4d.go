@@ -43,10 +43,15 @@ type Lease struct {
 	Hostname         string    `json:"hostname"`
 	HostnameOverride string    `json:"hostname_override"`
 	Expiry           time.Time `json:"expiry"`
+	LastACK          time.Time `json:"last_ack"`
 }
 
 func (l *Lease) Expired(at time.Time) bool {
 	return !l.Expiry.IsZero() && at.After(l.Expiry)
+}
+
+func (l *Lease) Active(at time.Time) bool {
+	return !l.LastACK.IsZero() && at.Before(l.LastACK.Add(leasePeriod))
 }
 
 type Handler struct {
@@ -90,18 +95,14 @@ func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.Pac
 	copy(start, serverIP)
 	start[len(start)-1] += 1
 	return &Handler{
-		rawConn:    conn,
-		iface:      iface,
-		leasesHW:   make(map[string]int),
-		leasesIP:   make(map[int]*Lease),
-		serverIP:   serverIP,
-		start:      start,
-		leaseRange: 230,
-		// Apple recommends a DHCP lease time of 1 hour in
-		// https://support.apple.com/de-ch/HT202068,
-		// so if 20 minutes ever causes any trouble,
-		// we should try increasing it to 1 hour.
-		LeasePeriod: 20 * time.Minute,
+		rawConn:     conn,
+		iface:       iface,
+		leasesHW:    make(map[string]int),
+		leasesIP:    make(map[int]*Lease),
+		serverIP:    serverIP,
+		start:       start,
+		leaseRange:  230,
+		LeasePeriod: leasePeriod,
 		options: dhcp4.Options{
 			dhcp4.OptionSubnetMask:       []byte{255, 255, 255, 0},
 			dhcp4.OptionRouter:           []byte(serverIP),
@@ -113,6 +114,12 @@ func NewHandler(dir string, iface *net.Interface, ifaceName string, conn net.Pac
 	}, nil
 }
 
+// Apple recommends a DHCP lease time of 1 hour in
+// https://support.apple.com/de-ch/HT202068,
+// so if 20 minutes ever causes any trouble,
+// we should try increasing it to 1 hour.
+const leasePeriod = 20 * time.Minute
+
 // SetLeases overwrites the leases database with the specified leases, typically
 // loaded from persistent storage. There is no locking, so SetLeases must be
 // called before Serve.
@@ -122,6 +129,9 @@ func (h *Handler) SetLeases(leases []*Lease) {
 	h.leasesHW = make(map[string]int)
 	h.leasesIP = make(map[int]*Lease)
 	for _, l := range leases {
+		if l.LastACK.IsZero() {
+			l.LastACK = l.Expiry
+		}
 		h.leasesHW[l.HardwareAddr] = l.Num
 		h.leasesIP[l.Num] = l
 	}
@@ -334,6 +344,7 @@ func (h *Handler) serveDHCP(p dhcp4.Packet, msgType dhcp4.MessageType, options d
 			HardwareAddr: hwAddr,
 			Expiry:       h.timeNow().Add(h.leasePeriodForDevice(hwAddr)),
 			Hostname:     string(options[dhcp4.OptionHostName]),
+			LastACK:      h.timeNow(),
 		}
 		copy(lease.Addr, reqIP.To4())
 
