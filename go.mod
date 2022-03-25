@@ -18,7 +18,7 @@ require (
 	github.com/krolaw/dhcp4 v0.0.0-20190909130307-a50d88189771
 	github.com/libdns/cloudflare v0.1.0
 	github.com/libdns/libdns v0.2.0
-	github.com/mdlayher/ndp v0.0.0-20200602162440-17ab9e3e5567
+	github.com/mdlayher/ndp v0.10.0
 	github.com/mdlayher/netlink v1.6.0 // indirect
 	github.com/mdlayher/packet v1.0.0
 	github.com/miekg/dns v1.1.42

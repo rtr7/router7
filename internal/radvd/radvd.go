@@ -18,6 +18,7 @@ package radvd
 import (
 	"log"
 	"net"
+	"net/netip"
 	"sync"
 	"time"
 
@@ -144,21 +145,21 @@ func (s *Server) sendAdvertisement(addr net.Addr) error {
 		if err != nil {
 			return err
 		}
-		var linkLocal net.IP
+		var linkLocal netip.Addr
 		for _, addr := range addrs {
 			ipnet, ok := addr.(*net.IPNet)
 			if !ok {
 				continue
 			}
 			if ipv6LinkLocal.Contains(ipnet.IP) {
-				linkLocal = ipnet.IP
+				linkLocal, _ = netip.AddrFromSlice(ipnet.IP)
 				break
 			}
 		}
-		if !linkLocal.Equal(net.IPv6zero) {
+		if linkLocal.IsValid() && !linkLocal.IsUnspecified() {
 			options = append(options, &ndp.RecursiveDNSServer{
 				Lifetime: 30 * time.Minute,
-				Servers:  []net.IP{linkLocal},
+				Servers:  []netip.Addr{linkLocal},
 			})
 		}
 	}
@@ -170,13 +171,14 @@ func (s *Server) sendAdvertisement(addr net.Addr) error {
 			ones = 64
 		}
 
+		addr, _ := netip.AddrFromSlice(prefix.IP)
 		options = append(options, &ndp.PrefixInformation{
 			PrefixLength:                   uint8(ones),
 			OnLink:                         true,
 			AutonomousAddressConfiguration: true,
 			ValidLifetime:                  2 * time.Hour,
 			PreferredLifetime:              30 * time.Minute,
-			Prefix:                         prefix.IP,
+			Prefix:                         addr,
 		})
 	}
 
