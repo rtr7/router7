@@ -107,8 +107,6 @@ Example:
 Schema: see [`portForwardings`](
 https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L431)
 
-Please be aware that Hairpinning is currently not supported (see issue [#53 Support for Hairpinning](https://github.com/rtr7/router7/issues/53]))
-
 ## Updates
 
 Run e.g. `rtr7-safe-update -updates_dir=$HOME/router7/updates` to:
