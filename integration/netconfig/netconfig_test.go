@@ -53,6 +53,12 @@ const goldenInterfaces = `
       "addr": "fe80::1/64",
       "extra_addrs": [
         "10.22.100.1/24"
+      ],
+      "extra_routes": [
+        {
+          "destination": "2a02:168:4a00:22::/64",
+          "gateway": "fe80::2"
+        }
       ]
     }
   ]
@@ -473,6 +479,16 @@ peer: AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=
 		addr6Re := regexp.MustCompile(`(?m)^\s*inet6 fe80::1/64 scope link\s*$`)
 		if !addr6Re.MatchString(string(out)) {
 			t.Errorf("regexp %s does not match %s", addr6Re, string(out))
+		}
+
+		out, err = exec.Command("ip", "-netns", ns, "-6", "route", "show", "dev", "wg0").Output()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		extraRouteRe := regexp.MustCompile(`(?m)^\s*2a02:168:4a00:22::/64 via fe80::2 metric 1024 pref medium\s*$`)
+		if !extraRouteRe.MatchString(string(out)) {
+			t.Errorf("regexp %s does not match %s", extraRouteRe, string(out))
 		}
 
 	})

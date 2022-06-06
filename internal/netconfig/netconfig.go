@@ -191,12 +191,18 @@ func applyDhcp6(dir string) error {
 	return nil
 }
 
+type Route struct {
+	Destination string `json:"destination"` // e.g. 2a02:168:4a00:22::/64
+	Gateway     string `json:"gateway"`     // e.g. fe80::1
+}
+
 type InterfaceDetails struct {
 	HardwareAddr      string   `json:"hardware_addr"`       // e.g. dc:9b:9c:ee:72:fd
 	SpoofHardwareAddr string   `json:"spoof_hardware_addr"` // e.g. dc:9b:9c:ee:72:fd
 	Name              string   `json:"name"`                // e.g. uplink0, or lan0
 	Addr              string   `json:"addr"`                // e.g. 192.168.42.1/24
 	ExtraAddrs        []string `json:"extra_addrs"`         // e.g. ["192.168.23.1/24"]
+	ExtraRoutes       []Route  `json:"extra_routes"`
 }
 
 type BridgeDetails struct {
@@ -402,6 +408,7 @@ func applyInterfaces(dir, root string) error {
 		}
 
 		for _, addr := range details.ExtraAddrs {
+			log.Printf("replacing extra address %v on %v", addr, attr.Name)
 			addr, err := netlink.ParseAddr(addr)
 			if err != nil {
 				return fmt.Errorf("ParseAddr(%q): %v", addr, err)
@@ -412,8 +419,23 @@ func applyInterfaces(dir, root string) error {
 			}
 		}
 
-		// TODO: allow static route configuration (ExtraRoutes)
-		// 2a02:168:4a00:22::/64 via fe80::2 dev wg0
+		for _, route := range details.ExtraRoutes {
+			_, dst, err := net.ParseCIDR(route.Destination)
+			if err != nil {
+				return fmt.Errorf("ParseCIDR(%q): %v", route.Destination, err)
+			}
+			r := &netlink.Route{Dst: dst}
+			if route.Gateway != "" {
+				r.Gw = net.ParseIP(route.Gateway)
+			}
+			r.LinkIndex = attr.Index
+
+			log.Printf("replacing extra route %v on %v", r, attr.Name)
+
+			if err := netlink.RouteReplace(r); err != nil {
+				return fmt.Errorf("RouteReplace(%v): %v", r, err)
+			}
+		}
 	}
 	return nil
 }
