@@ -192,10 +192,11 @@ func applyDhcp6(dir string) error {
 }
 
 type InterfaceDetails struct {
-	HardwareAddr      string `json:"hardware_addr"`       // e.g. dc:9b:9c:ee:72:fd
-	SpoofHardwareAddr string `json:"spoof_hardware_addr"` // e.g. dc:9b:9c:ee:72:fd
-	Name              string `json:"name"`                // e.g. uplink0, or lan0
-	Addr              string `json:"addr"`                // e.g. 192.168.42.1/24
+	HardwareAddr      string   `json:"hardware_addr"`       // e.g. dc:9b:9c:ee:72:fd
+	SpoofHardwareAddr string   `json:"spoof_hardware_addr"` // e.g. dc:9b:9c:ee:72:fd
+	Name              string   `json:"name"`                // e.g. uplink0, or lan0
+	Addr              string   `json:"addr"`                // e.g. 192.168.42.1/24
+	ExtraAddrs        []string `json:"extra_addrs"`         // e.g. ["192.168.23.1/24"]
 }
 
 type BridgeDetails struct {
@@ -399,6 +400,20 @@ func applyInterfaces(dir, root string) error {
 				}
 			}
 		}
+
+		for _, addr := range details.ExtraAddrs {
+			addr, err := netlink.ParseAddr(addr)
+			if err != nil {
+				return fmt.Errorf("ParseAddr(%q): %v", addr, err)
+			}
+
+			if err := netlink.AddrReplace(l, addr); err != nil {
+				return fmt.Errorf("AddrReplace(%s, %v): %v", attr.Name, addr, err)
+			}
+		}
+
+		// TODO: allow static route configuration (ExtraRoutes)
+		// 2a02:168:4a00:22::/64 via fe80::2 dev wg0
 	}
 	return nil
 }

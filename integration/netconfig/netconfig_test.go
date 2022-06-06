@@ -50,7 +50,10 @@ const goldenInterfaces = `
     },
     {
       "name": "wg0",
-      "addr": "fe80::1/64"
+      "addr": "fe80::1/64",
+      "extra_addrs": [
+        "10.22.100.1/24"
+      ]
     }
   ]
 }
@@ -461,6 +464,12 @@ peer: AVU3LodtnFaFnJmMyNNW7cUk4462lqnVULTFkjWYvRo=
 		if !upRe.MatchString(string(out)) {
 			t.Errorf("regexp %s does not match %s", upRe, string(out))
 		}
+
+		addr4Re := regexp.MustCompile(`(?m)^\s*inet 10.22.100.1/24 brd 10.22.100.255 scope global wg0\s*$`)
+		if !addr4Re.MatchString(string(out)) {
+			t.Errorf("regexp %s does not match %s", addr4Re, string(out))
+		}
+
 		addr6Re := regexp.MustCompile(`(?m)^\s*inet6 fe80::1/64 scope link\s*$`)
 		if !addr6Re.MatchString(string(out)) {
 			t.Errorf("regexp %s does not match %s", addr6Re, string(out))
