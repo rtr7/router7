@@ -28,6 +28,7 @@ import (
 
 	"github.com/rtr7/router7/internal/netconfig"
 	"github.com/vishvananda/netlink"
+	"github.com/vishvananda/netns"
 
 	"github.com/andreyvit/diff"
 	"github.com/google/go-cmp/cmp"
@@ -239,19 +240,24 @@ const goldenDhcp6 = `
 }
 `
 
-type wgLink struct{}
+type wgLink struct {
+	ns int
+}
 
 func (w *wgLink) Type() string { return "wireguard" }
 
 func (w *wgLink) Attrs() *netlink.LinkAttrs {
 	attrs := netlink.NewLinkAttrs()
 	attrs.Name = "wg5"
+	if w.ns > 0 {
+		attrs.Namespace = netlink.NsFd(w.ns)
+	}
 	return &attrs
 }
 
 var wireGuardAvailable = func() bool {
 	// The wg tool must also be available for our test to succeed:
-	if _, err := exec.LookPath("wg"); err == nil {
+	if _, err := exec.LookPath("wg"); err != nil {
 		return false
 	}
 
@@ -265,7 +271,18 @@ var wireGuardAvailable = func() bool {
 	}
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
-	return netlink.LinkAdd(&wgLink{}) == nil
+	nsHandle, err := netns.GetFromName(ns)
+	if err != nil {
+		log.Printf("GetFromName: %v", err)
+		return false
+	}
+
+	if err := netlink.LinkAdd(&wgLink{ns: int(nsHandle)}); err != nil {
+		log.Printf("netlink.LinkAdd: %v", err)
+		return false
+	}
+
+	return true
 }()
 
 func TestNetconfig(t *testing.T) {
