@@ -59,7 +59,7 @@ func subnetMaskSize(mask string) (int, error) {
 	return ones, nil
 }
 
-func applyDhcp4(dir string) error {
+func applyDhcp4(dir string, cfg InterfaceConfig) error {
 	b, err := ioutil.ReadFile(filepath.Join(dir, "dhcp4/wire/lease.json"))
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -137,20 +137,85 @@ func applyDhcp4(dir string) error {
 		return fmt.Errorf("RouteReplace(router): %v", err)
 	}
 
-	if err := h.RouteReplace(&netlink.Route{
-		LinkIndex: link.Attrs().Index,
-		Dst: &net.IPNet{
-			IP:   net.ParseIP("0.0.0.0"),
-			Mask: net.CIDRMask(0, 32),
-		},
-		Gw:       net.ParseIP(got.Router),
-		Src:      net.ParseIP(got.ClientIP),
-		Protocol: RTPROT_DHCP,
-	}); err != nil {
-		return fmt.Errorf("RouteReplace(default): %v", err)
+	if defaultViaWireguard(cfg) {
+		// The default route is on a WireGuard interface, so do not install the
+		// default route from the DHCP reply. Instead, set up a host route for
+		// the WireGuard endpoint(s).
+
+		log.Printf("IPv4 traffic is routed via WireGuard, setting host route instead of default route")
+
+		b, err := ioutil.ReadFile(filepath.Join(dir, "wireguard.json"))
+		if err != nil {
+			return err
+		}
+		var wgcfg wireguardInterfaces
+		if err := json.Unmarshal(b, &wgcfg); err != nil {
+			return err
+		}
+
+		for _, iface := range wgcfg.Interfaces {
+			for _, p := range iface.Peers {
+				addr, err := net.ResolveUDPAddr("udp", p.Endpoint)
+				if err != nil {
+					return err
+				}
+
+				log.Printf("  WireGuard endpoint %s", addr.IP)
+
+				router := net.ParseIP(got.Router)
+				if addr.IP.Equal(router) {
+					continue // endpoint == router, no route required
+				}
+
+				if err := h.RouteReplace(&netlink.Route{
+					LinkIndex: link.Attrs().Index,
+					Dst: &net.IPNet{
+						IP:   addr.IP,
+						Mask: net.CIDRMask(32, 32),
+					},
+					Gw:       net.ParseIP(got.Router),
+					Src:      net.ParseIP(got.ClientIP),
+					Protocol: RTPROT_DHCP,
+				}); err != nil {
+					return fmt.Errorf("RouteReplace(default): %v", err)
+				}
+			}
+		}
+	} else {
+		if err := h.RouteReplace(&netlink.Route{
+			LinkIndex: link.Attrs().Index,
+			Dst: &net.IPNet{
+				IP:   net.ParseIP("0.0.0.0"),
+				Mask: net.CIDRMask(0, 32),
+			},
+			Gw:       net.ParseIP(got.Router),
+			Src:      net.ParseIP(got.ClientIP),
+			Protocol: RTPROT_DHCP,
+		}); err != nil {
+			return fmt.Errorf("RouteReplace(default): %v", err)
+		}
 	}
 
 	return nil
+}
+
+func defaultViaWireguard(cfg InterfaceConfig) bool {
+	for _, iface := range cfg.Interfaces {
+		if !strings.HasPrefix(iface.Name, "wg") {
+			continue
+		}
+		for _, route := range iface.ExtraRoutes {
+			_, n, err := net.ParseCIDR(route.Destination)
+			if err != nil {
+				continue
+			}
+			ones, bits := n.Mask.Size()
+			if n.IP.Equal(net.IPv4zero) && ones == 0 && bits == 32 {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 func applyDhcp6(dir string) error {
@@ -305,18 +370,7 @@ func applyBridges(cfg *InterfaceConfig) error {
 	return nil
 }
 
-func applyInterfaces(dir, root string) error {
-	b, err := ioutil.ReadFile(filepath.Join(dir, "interfaces.json"))
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	var cfg InterfaceConfig
-	if err := json.Unmarshal(b, &cfg); err != nil {
-		return err
-	}
+func applyInterfaces(dir, root string, cfg InterfaceConfig) error {
 	byName := make(map[string]InterfaceDetails)
 	byHardwareAddr := make(map[string]InterfaceDetails)
 	for _, details := range cfg.Interfaces {
@@ -994,10 +1048,20 @@ func applySysctl(ifname string) error {
 }
 
 func Apply(dir, root string) error {
+	var cfg InterfaceConfig
+	b, err := ioutil.ReadFile(filepath.Join(dir, "interfaces.json"))
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	if err == nil || os.IsNotExist(err) {
+		if err := json.Unmarshal(b, &cfg); err != nil {
+			return err
+		}
 
-	// TODO: split into two parts: delay the up until later
-	if err := applyInterfaces(dir, root); err != nil {
-		return fmt.Errorf("interfaces: %v", err)
+		// TODO: split apply into two parts: delay the up until later
+		if err := applyInterfaces(dir, root, cfg); err != nil {
+			return fmt.Errorf("interfaces: %v", err)
+		}
 	}
 
 	var errors []error
@@ -1006,7 +1070,7 @@ func Apply(dir, root string) error {
 		log.Println(err)
 	}
 
-	if err := applyDhcp4(dir); err != nil {
+	if err := applyDhcp4(dir, cfg); err != nil {
 		appendError(fmt.Errorf("dhcp4: %v", err))
 	}
 
