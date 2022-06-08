@@ -19,6 +19,7 @@ import (
 	"log"
 	"net"
 	"net/netip"
+	"strings"
 	"sync"
 	"time"
 
@@ -92,6 +93,10 @@ func (s *Server) Serve(ifname string, conn net.PacketConn) error {
 		n, _, addr, err := s.pc.ReadFrom(buf)
 		if err != nil {
 			return err
+		}
+		if !strings.HasSuffix(addr.String(), "%"+ifname) {
+			log.Printf("ignoring off-interface request from %v", addr)
+			continue
 		}
 		// TODO: isn’t this guaranteed by the filter above?
 		if n == 0 ||
