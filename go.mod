@@ -1,6 +1,6 @@
 module github.com/rtr7/router7
 
-go 1.13
+go 1.17
 
 require (
 	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
