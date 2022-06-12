@@ -25,9 +25,8 @@ endif
 		${PKGS}
 
 recover: #test
-	go install \
-		github.com/gokrazy/tools/cmd/gokr-packer@lastet \
-		github.com/rtr7/tools/cmd/rtr7-recover@latest
+	go install github.com/gokrazy/tools/cmd/gokr-packer@latest
+	go install github.com/rtr7/tools/cmd/rtr7-recover@latest
 	GOARCH=amd64 gokr-packer \
 		-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp,github.com/gokrazy/gokrazy/cmd/randomd \
 		-kernel_package=github.com/rtr7/kernel \
