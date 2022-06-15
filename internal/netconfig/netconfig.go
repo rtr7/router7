@@ -268,6 +268,7 @@ type InterfaceDetails struct {
 	Addr              string   `json:"addr"`                // e.g. 192.168.42.1/24
 	ExtraAddrs        []string `json:"extra_addrs"`         // e.g. ["192.168.23.1/24"]
 	ExtraRoutes       []Route  `json:"extra_routes"`
+	MTU               int      `json:"mtu"` // e.g. 1492 for PPPoE connections
 }
 
 type BridgeDetails struct {
@@ -420,6 +421,12 @@ func applyInterfaces(dir, root string, cfg InterfaceConfig) error {
 				return fmt.Errorf("LinkSetName(%q): %v", details.Name, err)
 			}
 			attr.Name = details.Name
+		}
+
+		if details.MTU != 0 {
+			if err := netlink.LinkSetMTU(l, details.MTU); err != nil {
+				return fmt.Errorf("LinkSetMTU(%d): %v", details.MTU, err)
+			}
 		}
 
 		if spoof := details.SpoofHardwareAddr; spoof != "" {

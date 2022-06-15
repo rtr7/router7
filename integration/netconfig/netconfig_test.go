@@ -46,7 +46,8 @@ const goldenInterfaces = `
       "hardware_addr": "02:73:53:00:b0:0c",
       "spoof_hardware_addr": "02:73:53:00:b0:aa",
       "name": "lan0",
-      "addr": "192.168.42.1/24"
+      "addr": "192.168.42.1/24",
+      "mtu": 1492
     },
     {
       "name": "wg0",
@@ -392,6 +393,9 @@ func TestNetconfig(t *testing.T) {
 		}
 		if !strings.Contains(string(link), "link/ether 02:73:53:00:b0:aa") {
 			t.Errorf("lan0 MAC address is not 02:73:53:00:b0:aa")
+		}
+		if !strings.Contains(string(link), " mtu 1492 ") {
+			t.Errorf("lan0 MTU is not 1492 (link: %q)", string(link))
 		}
 
 		addrs, err := exec.Command("ip", "-netns", ns, "address", "show", "dev", "uplink0").Output()
