@@ -1038,6 +1038,8 @@ func applySysctl(ifname string) error {
 	sysctls := []string{
 		"net.ipv4.ip_forward=1",
 		"net.ipv6.conf.all.forwarding=1",
+		"net.ipv4.icmp_ratelimit=0",
+		"net.ipv6.icmp.ratelimit=0",
 	}
 	if ifname != "" {
 		sysctls = append(sysctls, "net.ipv6.conf."+ifname+".accept_ra=2")
