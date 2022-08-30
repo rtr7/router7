@@ -31,6 +31,7 @@ import (
 	"github.com/google/nftables/binaryutil"
 	"github.com/google/nftables/expr"
 	"github.com/google/renameio"
+	"github.com/mdlayher/ethtool"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
 
@@ -269,6 +270,13 @@ type InterfaceDetails struct {
 	ExtraAddrs        []string `json:"extra_addrs"`         // e.g. ["192.168.23.1/24"]
 	ExtraRoutes       []Route  `json:"extra_routes"`
 	MTU               int      `json:"mtu"` // e.g. 1492 for PPPoE connections
+	// FEC optionally allows configuring forward error correction, e.g. RS for
+	// reed-solomon forward error correction, or Off to disable.
+	//
+	// Some network card and SFP module combinations (e.g. Mellanox ConnectX-4
+	// with a Flexoptix P.B1625G.10.AD) need to explicitly be configured to use
+	// RS forward error correction, otherwise they won’t link.
+	FEC string `json:"fec"`
 }
 
 type BridgeDetails struct {
@@ -371,6 +379,63 @@ func applyBridges(cfg *InterfaceConfig) error {
 	return nil
 }
 
+func applyInterfaceFEC(details InterfaceDetails) error {
+	if details.FEC == "" {
+		return nil // nothing to do
+	}
+
+	desired := ethtool.FECModes(unix.ETHTOOL_FEC_RS)
+	switch strings.ToLower(details.FEC) {
+	case "rs":
+		desired = unix.ETHTOOL_FEC_RS
+	case "baser":
+		desired = unix.ETHTOOL_FEC_BASER
+	case "off":
+		desired = unix.ETHTOOL_FEC_OFF
+	case "none":
+		desired = unix.ETHTOOL_FEC_NONE
+	case "llrs":
+		desired = unix.ETHTOOL_FEC_LLRS
+	case "auto":
+		desired = 0
+	default:
+		return fmt.Errorf("unknown FEC value %q, expected one of RS, BaseR, LLRS, Auto, None, Off", details.FEC)
+	}
+
+	cl, err := ethtool.New()
+	if err != nil {
+		return err
+	}
+	defer cl.Close()
+
+	li, err := cl.LinkInfo(ethtool.Interface{Name: details.Name})
+	if err != nil {
+		return fmt.Errorf("LinkInfo(%s): %v", details.Name, err)
+	}
+
+	fec, err := cl.FEC(li.Interface)
+	if err != nil {
+		return fmt.Errorf("FEC(%s): %v", li.Interface.Name, err)
+	}
+	log.Printf("FEC supported/configured: [%v], active: %v", fec.Supported(), fec.Active)
+	// fec.Active is not set when there is no link, so we compare
+	// supported/configured instead.
+	if fec.Supported() == desired {
+		return nil // already matching the desired configuration
+	}
+
+	log.Printf("setting FEC to %v", desired)
+	if err := cl.SetFEC(ethtool.FEC{
+		Interface: li.Interface,
+		Modes:     desired,
+		Auto:      strings.ToLower(details.FEC) == "auto",
+	}); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func applyInterfaces(dir, root string, cfg InterfaceConfig) error {
 	byName := make(map[string]InterfaceDetails)
 	byHardwareAddr := make(map[string]InterfaceDetails)
@@ -437,6 +502,11 @@ func applyInterfaces(dir, root string, cfg InterfaceConfig) error {
 			if err := netlink.LinkSetHardwareAddr(l, hwaddr); err != nil {
 				return fmt.Errorf("LinkSetHardwareAddr(%v): %v", hwaddr, err)
 			}
+		}
+
+		if err := applyInterfaceFEC(details); err != nil {
+			// TODO: turn this into returning an error once proven stable
+			log.Printf("applyInterfaceFEC: %v", err)
 		}
 
 		if attr.OperState != netlink.OperUp {
