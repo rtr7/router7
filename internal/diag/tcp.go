@@ -53,6 +53,7 @@ func TCP4(addr string) Node {
 
 type tcp6 struct {
 	children []Node
+	ifname   string
 	addr     string
 }
 
@@ -70,7 +71,39 @@ func (d *tcp6) Children() []Node {
 }
 
 func (d *tcp6) Evaluate() (string, error) {
-	conn, err := net.Dial("tcp6", d.addr)
+	var dialer net.Dialer
+
+	if d.ifname != "" {
+		iface, err := net.InterfaceByName(d.ifname)
+		if err != nil {
+			return "", err
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			return "", err
+		}
+		for _, addr := range addrs {
+			ipnet, ok := addr.(*net.IPNet)
+			if !ok {
+				continue
+			}
+
+			if ipnet.IP.To4() != nil {
+				continue // skip IPv4 addresses
+			}
+
+			if !global.Contains(ipnet.IP) {
+				continue // skip local IPv6 addresses
+			}
+
+			dialer.LocalAddr = &net.TCPAddr{
+				IP: ipnet.IP,
+			}
+			break
+		}
+	}
+
+	conn, err := dialer.Dial("tcp6", d.addr)
 	if err != nil {
 		return "", err
 	}
@@ -80,6 +113,9 @@ func (d *tcp6) Evaluate() (string, error) {
 
 // TCP6 returns a Node which succeeds when the specified address accepts a TCPv6
 // connection.
-func TCP6(addr string) Node {
-	return &tcp6{addr: addr}
+func TCP6(ifname, addr string) Node {
+	return &tcp6{
+		ifname: ifname,
+		addr:   addr,
+	}
 }
