@@ -55,21 +55,21 @@
 <p><img src="https://github.com/rtr7/router7/raw/master/devsetup.jpg"
 width="800" alt="router7 development setup"></p>
 <p>Next, build a router7 image:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">go get -u github.com/gokrazy/tools/cmd/gokr-packer github.com/rtr7/tools/cmd/...
-go get -u -d github.com/rtr7/router7
-mkdir /tmp/recovery
-GOARCH<span style="color:#f92672">=</span>amd64 gokr-packer <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-hostname<span style="color:#f92672">=</span>router7 <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-overwrite_boot<span style="color:#f92672">=</span>/tmp/recovery/boot.img <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-overwrite_mbr<span style="color:#f92672">=</span>/tmp/recovery/mbr.img <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-overwrite_root<span style="color:#f92672">=</span>/tmp/recovery/root.img <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-eeprom_package<span style="color:#f92672">=</span> <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-kernel_package<span style="color:#f92672">=</span>github.com/rtr7/kernel <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-firmware_package<span style="color:#f92672">=</span>github.com/rtr7/kernel <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-gokrazy_pkgs<span style="color:#f92672">=</span>github.com/gokrazy/gokrazy/cmd/ntp <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	-serial_console<span style="color:#f92672">=</span>ttyS0,115200n8 <span style="color:#ae81ff">\
-</span><span style="color:#ae81ff"></span>	github.com/rtr7/router7/cmd/...
-</code></pre></div><p>Run <code>rtr7-recover -boot=/tmp/recovery/boot.img -mbr=/tmp/recovery/mbr.img -root=/tmp/recovery/root.img</code> to:</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>go get -u github.com/gokrazy/tools/cmd/gokr-packer github.com/rtr7/tools/cmd/...
+</span></span><span style="display:flex;"><span>go get -u -d github.com/rtr7/router7
+</span></span><span style="display:flex;"><span>mkdir /tmp/recovery
+</span></span><span style="display:flex;"><span>GOARCH<span style="color:#f92672">=</span>amd64 gokr-packer <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-hostname<span style="color:#f92672">=</span>router7 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-overwrite_boot<span style="color:#f92672">=</span>/tmp/recovery/boot.img <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-overwrite_mbr<span style="color:#f92672">=</span>/tmp/recovery/mbr.img <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-overwrite_root<span style="color:#f92672">=</span>/tmp/recovery/root.img <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-eeprom_package<span style="color:#f92672">=</span> <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-kernel_package<span style="color:#f92672">=</span>github.com/rtr7/kernel <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-firmware_package<span style="color:#f92672">=</span>github.com/rtr7/kernel <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-gokrazy_pkgs<span style="color:#f92672">=</span>github.com/gokrazy/gokrazy/cmd/ntp <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	-serial_console<span style="color:#f92672">=</span>ttyS0,115200n8 <span style="color:#ae81ff">\
+</span></span></span><span style="display:flex;"><span><span style="color:#ae81ff"></span>	github.com/rtr7/router7/cmd/...
+</span></span></code></pre></div><p>Run <code>rtr7-recover -boot=/tmp/recovery/boot.img -mbr=/tmp/recovery/mbr.img -root=/tmp/recovery/root.img</code> to:</p>
 <ul>
 <li>trigger a reset <a href="#rebootor">if a Teensy with the rebootor firmware is attached</a></li>
 <li>serve a DHCP lease to all clients which request PXE boot (i.e., your apu2c4)</li>
@@ -88,41 +88,40 @@ GOARCH<span style="color:#f92672">=</span>amd64 gokr-packer <span style="color:#
 <h3 id="interfaces">Interfaces</h3>
 <p>The <code>/perm/interfaces.json</code> configuration file will be <a href="https://github.com/rtr7/tools/blob/57c2cdc3b629d2fbd13564ae37f6282f6ee8427f/cmd/rtr7-recovery-init/recoveryinit.go#L320">automatically created</a> if it is not present when you run the first recovery.</p>
 <p>Example:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
-    <span style="color:#f92672">&#34;interfaces&#34;</span>: [
-        {
-            <span style="color:#f92672">&#34;hardware_addr&#34;</span>: <span style="color:#e6db74">&#34;12:34:56:78:9a:b0&#34;</span>,
-            <span style="color:#f92672">&#34;name&#34;</span>: <span style="color:#e6db74">&#34;lan0&#34;</span>,
-            <span style="color:#f92672">&#34;addr&#34;</span>: <span style="color:#e6db74">&#34;192.168.0.1/24&#34;</span>
-        },
-        {
-            <span style="color:#f92672">&#34;hardware_addr&#34;</span>: <span style="color:#e6db74">&#34;12:34:56:78:9a:b2&#34;</span>,
-            <span style="color:#f92672">&#34;name&#34;</span>: <span style="color:#e6db74">&#34;uplink0&#34;</span>
-        }
-    ]
-}
-</code></pre></div><p>Schema: see <a href="https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L183"><code>InterfaceConfig</code></a></p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">&#34;interfaces&#34;</span>: [
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;hardware_addr&#34;</span>: <span style="color:#e6db74">&#34;12:34:56:78:9a:b0&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;name&#34;</span>: <span style="color:#e6db74">&#34;lan0&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;addr&#34;</span>: <span style="color:#e6db74">&#34;192.168.0.1/24&#34;</span>
+</span></span><span style="display:flex;"><span>        },
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;hardware_addr&#34;</span>: <span style="color:#e6db74">&#34;12:34:56:78:9a:b2&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;name&#34;</span>: <span style="color:#e6db74">&#34;uplink0&#34;</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    ]
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Schema: see <a href="https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L183"><code>InterfaceConfig</code></a></p>
 <h3 id="port-forwarding">Port Forwarding</h3>
 <p>The <code>/perm/portforwardings.json</code> configuration file can be created to define port forwarding rules.</p>
 <p>Example:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-json" data-lang="json">{
-    <span style="color:#f92672">&#34;forwardings&#34;</span>: [
-        {
-            <span style="color:#f92672">&#34;proto&#34;</span>: <span style="color:#e6db74">&#34;tcp&#34;</span>,
-            <span style="color:#f92672">&#34;port&#34;</span>: <span style="color:#e6db74">&#34;22&#34;</span>,
-            <span style="color:#f92672">&#34;dest_addr&#34;</span>: <span style="color:#e6db74">&#34;10.0.0.10&#34;</span>,
-            <span style="color:#f92672">&#34;dest_port&#34;</span>: <span style="color:#e6db74">&#34;22&#34;</span>
-        },
-        {
-            <span style="color:#f92672">&#34;proto&#34;</span>: <span style="color:#e6db74">&#34;tcp&#34;</span>,
-            <span style="color:#f92672">&#34;port&#34;</span>: <span style="color:#e6db74">&#34;80&#34;</span>,
-            <span style="color:#f92672">&#34;dest_addr&#34;</span>: <span style="color:#e6db74">&#34;10.0.0.10&#34;</span>,
-            <span style="color:#f92672">&#34;dest_port&#34;</span>: <span style="color:#e6db74">&#34;80&#34;</span>
-        }
-    ]
-}
-</code></pre></div><p>Schema: see <a href="https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L431"><code>portForwardings</code></a></p>
-<p>Please be aware that Hairpinning is currently not supported (see issue <a href="https://github.com/rtr7/router7/issues/53%5D">#53 Support for Hairpinning</a>)</p>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-json" data-lang="json"><span style="display:flex;"><span>{
+</span></span><span style="display:flex;"><span>    <span style="color:#f92672">&#34;forwardings&#34;</span>: [
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;proto&#34;</span>: <span style="color:#e6db74">&#34;tcp&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;port&#34;</span>: <span style="color:#e6db74">&#34;22&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;dest_addr&#34;</span>: <span style="color:#e6db74">&#34;10.0.0.10&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;dest_port&#34;</span>: <span style="color:#e6db74">&#34;22&#34;</span>
+</span></span><span style="display:flex;"><span>        },
+</span></span><span style="display:flex;"><span>        {
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;proto&#34;</span>: <span style="color:#e6db74">&#34;tcp&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;port&#34;</span>: <span style="color:#e6db74">&#34;80&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;dest_addr&#34;</span>: <span style="color:#e6db74">&#34;10.0.0.10&#34;</span>,
+</span></span><span style="display:flex;"><span>            <span style="color:#f92672">&#34;dest_port&#34;</span>: <span style="color:#e6db74">&#34;80&#34;</span>
+</span></span><span style="display:flex;"><span>        }
+</span></span><span style="display:flex;"><span>    ]
+</span></span><span style="display:flex;"><span>}
+</span></span></code></pre></div><p>Schema: see <a href="https://github.com/rtr7/router7/blob/f86e20be5305fc0e7e77421e0f2abde98a84f2a7/internal/netconfig/netconfig.go#L431"><code>portForwardings</code></a></p>
 <h2 id="updates">Updates</h2>
 <p>Run e.g. <code>rtr7-safe-update -updates_dir=$HOME/router7/updates</code> to:</p>
 <ul>
@@ -137,9 +136,9 @@ GOARCH<span style="color:#f92672">=</span>amd64 gokr-packer <span style="color:#
 <p>Given <code>rtr7-safe-update</code>’s safeguards, manual recovery should rarely be required.</p>
 <p>To manually roll back to an older image, invoke <code>rtr7-safe-update</code> via the
 <code>recover.bash</code> script in the image directory underneath <code>-updates_dir</code>, e.g.:</p>
-<div class="highlight"><pre style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4"><code class="language-shell" data-lang="shell">% cd ~/router7/updates/2018-07-03T17:33:52+02:00
-% ./recover.bash
-</code></pre></div><h2 id="rebootor">Teensy rebootor</h2>
+<div class="highlight"><pre tabindex="0" style="color:#f8f8f2;background-color:#272822;-moz-tab-size:4;-o-tab-size:4;tab-size:4;"><code class="language-shell" data-lang="shell"><span style="display:flex;"><span>% cd ~/router7/updates/2018-07-03T17:33:52+02:00
+</span></span><span style="display:flex;"><span>% ./recover.bash
+</span></span></code></pre></div><h2 id="rebootor">Teensy rebootor</h2>
 <p>The cheap and widely-available <a href="https://www.pjrc.com/store/teensypp.html">Teensy++ USB development board</a> comes with a firmware called rebootor, which is used by the <a href="https://www.pjrc.com/teensy/loader_cli.html"><code>teensy_loader_cli</code></a> program to perform hard resets.</p>
 <p>This setup can be used to programmatically reset the apu2c4 (from <code>rtr7-recover</code>) by connecting the Teensy++ to the <a href="http://pcengines.ch/pdf/apu2.pdf">apu2c4’s reset pins</a>:</p>
 <ul>

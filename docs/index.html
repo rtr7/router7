@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html>  <head>
-	<meta name="generator" content="Hugo 0.71.0-DEV" />
+	<meta name="generator" content="Hugo 0.98.0-DEV" />
     
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
@@ -44,7 +44,7 @@
 </nav>
 <h1 id="router7">router7</h1>
 <p>router7 is a pure-Go implementation of a small home internet router. It comes with all the services required to make a <a href="https://www.init7.net/en/internet/fiber7/">fiber7 internet connection</a> work (DHCPv4, DHCPv6, DNS, etc.).</p>
-<p>Note that this project should be considered a (working!) tech demo. Feature requests will likely not be implemented, and see <a href="CONTRIBUTING.md">CONTRIBUTING.md</a> for details about which contributions are welcome.</p>
+<p>Note that this project should be considered a (working!) tech demo. Feature requests will likely not be implemented, and see <a href="https://github.com/rtr7/router7/blob/master/CONTRIBUTING.md">CONTRIBUTING.md</a> for details about which contributions are welcome.</p>
 <h2 id="motivation">Motivation</h2>
 <p>Before starting router7, I was using the <a href="https://omnia.turris.cz/en/">Turris Omnia</a> router running OpenWrt. That worked fine up until May 2018, when an automated update pulled in a new version of <a href="https://git.openwrt.org/?p=project/odhcp6c.git;a=shortlog">odhcp6c</a>, OpenWrt’s DHCPv6 client. That version is incompatible with fiber7’s DHCP server setup (I think there are shortcomings on both sides).</p>
 <p>It was not only quicker to develop my own router than to wait for either side to resolve the issue, but it was also a lot of fun and allowed me to really tailor my router to my needs, experimenting with a bunch of interesting ideas I had.</p>
