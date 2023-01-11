@@ -78,6 +78,7 @@ update:
 # e.g. get a network namespace to talk through router7
 # ip link add dev veth1 type veth peer name veth2
 qemu:
+	mkdir -p /tmp/router7-qemu
 	GOARCH=amd64 gokr-packer \
 		-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp,github.com/gokrazy/gokrazy/cmd/randomd \
 		-hostname=qemu-router7 \
