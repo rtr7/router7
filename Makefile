@@ -71,8 +71,9 @@ strace:
 update:
 	rtr7-safe-update -build_command='make image DIR=$$GOKR_DIR'
 
-# sudo ip link add link enp0s31f6 name macvtap0 type macvtap
+# sudo ip link add link enp3s0 name macvtap0 type macvtap
 # sudo ip link set macvtap0 address 52:55:00:d1:55:03 up
+# sudo chown $USER /dev/tap*
 #
 # TODO: use veth pairs for router7’s lan0?
 # e.g. get a network namespace to talk through router7
