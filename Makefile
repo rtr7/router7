@@ -29,7 +29,7 @@ endif
 		-overwrite_boot=${DIR}/boot.img \
 		-overwrite_root=${DIR}/root.img \
 		-overwrite_mbr=${DIR}/mbr.img \
-		-serial_console=ttyS0,115200n8 \
+		-serial_console=ttyS0,115200 \
 		-hostname=router7 \
 		${PKGS}
 
