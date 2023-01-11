@@ -1,10 +1,19 @@
 SUDO=GOPATH=$(shell go env GOPATH) sudo --preserve-env=GOPATH
 
-PKGS := github.com/rtr7/router7/cmd/... \
-	github.com/gokrazy/breakglass \
+PKGS := github.com/gokrazy/breakglass \
 	github.com/gokrazy/timestamps \
-	github.com/stapelberg/zkj-nas-tools/wolgw \
-	github.com/gokrazy/gdns
+	github.com/gokrazy/gdns \
+	github.com/gokrazy/serial-busybox \
+	github.com/prometheus/node_exporter \
+	github.com/gokrazy/fbstatus \
+	github.com/gokrazy/iptables \
+	github.com/gokrazy/nsenter \
+	github.com/gokrazy/podman \
+	github.com/greenpau/cni-plugins/cmd/cni-nftables-portmap \
+	github.com/greenpau/cni-plugins/cmd/cni-nftables-firewall \
+	github.com/gokrazy/syslogd/cmd/gokr-syslogd \
+	github.com/gokrazy/stat/cmd/... \
+	github.com/rtr7/router7/cmd/...
 
 image:
 ifndef DIR
