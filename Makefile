@@ -1,4 +1,4 @@
-SUDO=GOPATH=$(shell go env GOPATH) sudo --preserve-env=GOPATH
+SUDO=GOPATH=$(shell go env GOPATH) sudo --preserve-env=GOPATH --preserve-env=PATH --preserve-env=HOME
 
 PKGS := github.com/gokrazy/breakglass \
 	github.com/gokrazy/timestamps \
@@ -46,9 +46,12 @@ recover: #test
 		-serial_console=ttyS0,115200n8 \
 		-hostname=router7 \
 		${PKGS}
-	${SUDO} /home/michael/go/bin/rtr7-recover \
-		-boot=/tmp/recovery/boot.img \
-		-root=/tmp/recovery/root.img
+	${SUDO} $(which rtr7-recover) \
+		--boot /tmp/recovery/boot.img \
+		--root /tmp/recovery/root.img \
+		--mbr /tmp/recovery/mbr.img \
+		--hostname router7 \
+		--interface enp0s31f6
 
 test:
 	# simulate recover (quick, for early for feedback)
