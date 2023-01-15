@@ -19,29 +19,62 @@ Connect your serial adapter ([usbcom1a](https://pcengines.ch/usbcom1a.htm) works
 
 Connect a network cable on `net0`, the port closest to the serial console port:
 
-<img src="https://github.com/rtr7/router7/raw/master/devsetup.jpg"
+<img src="https://raw.githubusercontent.com/rtr7/router7/master/devsetup.jpg"
 width="800" alt="router7 development setup">
 
-Next, build a router7 image:
+Next, create a router7 gokrazy instance (see [gokrazy
+quickstart](https://gokrazy.org/quickstart/) if you’re unfamiliar with gokrazy):
 
-```shell
-go get -u github.com/gokrazy/tools/cmd/gokr-packer github.com/rtr7/tools/cmd/...
-go get -u -d github.com/rtr7/router7
+```bash
+go install github.com/gokrazy/tools/cmd/gok@main
+go install github.com/rtr7/tools/cmd/...@latest
 mkdir /tmp/recovery
-GOARCH=amd64 gokr-packer \
-	-hostname=router7 \
-	-overwrite_boot=/tmp/recovery/boot.img \
-	-overwrite_mbr=/tmp/recovery/mbr.img \
-	-overwrite_root=/tmp/recovery/root.img \
-	-eeprom_package= \
-	-kernel_package=github.com/rtr7/kernel \
-	-firmware_package=github.com/rtr7/kernel \
-	-gokrazy_pkgs=github.com/gokrazy/gokrazy/cmd/ntp \
-	-serial_console=ttyS0,115200n8 \
-	github.com/rtr7/router7/cmd/...
+gok -i router7 new
+gok -i router7 edit
 ```
 
-Run `rtr7-recover -boot=/tmp/recovery/boot.img -mbr=/tmp/recovery/mbr.img -root=/tmp/recovery/root.img` to:
+Change the config until you have the following fields set:
+
+```json
+{
+    "Hostname": "router7",
+    "Packages": [
+        "github.com/gokrazy/fbstatus",
+        "github.com/gokrazy/hello",
+        "github.com/gokrazy/serial-busybox",
+        "github.com/gokrazy/breakglass"
+        "github.com/rtr7/router7/cmd/..."
+    ],
+    "SerialConsole": "ttyS0,115200",
+    "GokrazyPackages": [
+        "github.com/gokrazy/gokrazy/cmd/ntp",
+        "github.com/gokrazy/gokrazy/cmd/randomd"
+    ],
+    "KernelPackage": "github.com/rtr7/kernel",
+    "FirmwarePackage": "github.com/rtr7/kernel",
+    "EEPROMPackage": ""
+}
+```
+
+Then, build an image:
+
+```bash
+GOARCH=amd64 gok -i router7 overwrite \
+    --boot /tmp/recovery/boot.img \
+	--mbr /tmp/recovery/mbr.img \
+	--root /tmp/recovery/root.img
+```
+
+And serve the image for netboot installation:
+
+```bash
+rtr7-recover \
+    --boot /tmp/recovery/boot.img \
+    --mbr /tmp/recovery/mbr.img \
+    --root /tmp/recovery/root.img
+```
+
+Specifically, `rtr7-recover`:
 
 * trigger a reset [if a Teensy with the rebootor firmware is attached](#rebootor)
 * serve a DHCP lease to all clients which request PXE boot (i.e., your apu2c4)
