@@ -187,7 +187,7 @@ func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
 	}
 
 	leaseNum := dhcp4.IPRange(h.start, reqIP) - 1
-	if leaseNum < 0 || leaseNum >= h.leaseRange {
+	if leaseNum < 0 {
 		return -1
 	}
 
@@ -195,11 +195,19 @@ func (h *Handler) canLease(reqIP net.IP, hwaddr string) int {
 	defer h.leasesMu.Unlock()
 	l, ok := h.leasesIP[leaseNum]
 	if !ok {
+		if leaseNum >= h.leaseRange {
+			return -1
+		}
+
 		return leaseNum // lease available
 	}
 
 	if l.HardwareAddr == hwaddr {
 		return leaseNum // lease already owned by requestor
+	}
+
+	if leaseNum >= h.leaseRange {
+		return -1
 	}
 
 	if l.Expired(h.timeNow()) {
