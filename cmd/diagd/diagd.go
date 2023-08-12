@@ -80,38 +80,49 @@ func firstError(re *diag.EvalResult) string {
 	return ""
 }
 
+func graph(uplink string, ipv6 bool) *diag.Monitor {
+	const ip6allrouters = "ff02::2" // no /etc/hosts on gokrazy
+	graph := diag.Link(uplink).
+		Then(diag.DHCPv4().
+			Then(diag.Ping4Gateway().
+				Then(diag.TCP4("www.google.ch:80"))))
+
+	if ipv6 {
+		graph = graph.
+			Then(diag.DHCPv6().
+				Then(diag.TCP6("lan0", "www.google.ch:80"))).
+			Then(diag.RouterAdvertisments(uplink).
+				Then(diag.Ping6Gateway().
+					Then(diag.TCP6(uplink, "www.google.ch:80")))).
+			Then(diag.Ping6("", ip6allrouters+"%"+uplink))
+	}
+	return diag.NewMonitor(graph)
+}
+
 func logic() error {
 	var (
 		ifname = flag.String("interface",
 			"uplink0",
 			"interface name to query")
-	)
-	const (
-		ip6allrouters = "ff02::2" // no /etc/hosts on gokrazy
+		ipv6 = flag.Bool("ipv6",
+			true,
+			"whether to expect IPv6 connectivity in health.json")
 	)
 	flag.Parse()
 	uplink := *ifname
-	m := diag.NewMonitor(diag.Link(uplink).
-		Then(diag.DHCPv4().
-			Then(diag.Ping4Gateway().
-				Then(diag.TCP4("www.google.ch:80")))).
-		Then(diag.DHCPv6().
-			Then(diag.TCP6("lan0", "www.google.ch:80"))).
-		Then(diag.RouterAdvertisments(uplink).
-			Then(diag.Ping6Gateway().
-				Then(diag.TCP6(uplink, "www.google.ch:80")))).
-		Then(diag.Ping6("", ip6allrouters+"%"+uplink)))
+	mHumanReadable := graph(uplink, true) // for display only
+	mJSON := graph(uplink, *ipv6)         // for updates
 	var mu sync.Mutex
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		re := m.Evaluate()
+		re := mHumanReadable.Evaluate()
 		mu.Unlock()
 		fmt.Fprintf(w, `<!DOCTYPE html><style type="text/css">ul { list-style-type: none; }</style><ul>`)
 		dump(0, w, re)
 	})
 	http.HandleFunc("/health.json", func(w http.ResponseWriter, r *http.Request) {
 		mu.Lock()
-		re := m.Evaluate()
+		re := mJSON.Evaluate()
 		mu.Unlock()
 		reply := struct {
 			FirstError string `json:"first_error"`
