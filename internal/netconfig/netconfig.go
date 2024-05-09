@@ -876,8 +876,41 @@ func hairpinDNAT() []expr.Any {
 	}
 }
 
+const pfChain = "router7-portforwardings"
+
+// Only update port forwarding if there are existing rules.
+// This is required to not stomp over podman port forwarding, for example.
+func updatePortforwardingsOnly(dir, ifname string) error {
+	c := &nftables.Conn{}
+
+	nat, err := c.ListTable("nat")
+	if err != nil {
+		return err
+	}
+
+	chain, err := c.ListChain(nat, pfChain)
+	if err != nil {
+		return err
+	}
+
+	log.Printf("rules already configured, only updating port forwardings")
+
+	c.FlushChain(chain)
+	if err := applyPortForwardings(dir, ifname, c, nat, chain); err != nil {
+		return err
+	}
+
+	return c.Flush()
+}
+
 func applyFirewall(dir, ifname string) error {
 	c := &nftables.Conn{}
+
+	if err := updatePortforwardingsOnly(dir, ifname); err != nil {
+		log.Printf("could not update port forwardings (%v), creating ruleset from scratch", err)
+	} else {
+		return nil // keep existing ruleset
+	}
 
 	c.FlushRuleset()
 
@@ -886,12 +919,29 @@ func applyFirewall(dir, ifname string) error {
 		Name:   "nat",
 	})
 
+	pf := c.AddChain(&nftables.Chain{
+		Name:  pfChain,
+		Table: nat,
+		Type:  nftables.ChainTypeNAT,
+	})
+
 	prerouting := c.AddChain(&nftables.Chain{
 		Name:     "prerouting",
 		Hooknum:  nftables.ChainHookPrerouting,
 		Priority: nftables.ChainPriorityFilter,
 		Table:    nat,
 		Type:     nftables.ChainTypeNAT,
+	})
+
+	c.AddRule(&nftables.Rule{
+		Table: nat,
+		Chain: prerouting,
+		Exprs: []expr.Any{
+			&expr.Verdict{
+				Kind:  expr.VerdictJump,
+				Chain: pfChain,
+			},
+		},
 	})
 
 	postrouting := c.AddChain(&nftables.Chain{
@@ -925,7 +975,7 @@ func applyFirewall(dir, ifname string) error {
 		Exprs: hairpinDNAT(),
 	})
 
-	if err := applyPortForwardings(dir, ifname, c, nat, prerouting); err != nil {
+	if err := applyPortForwardings(dir, ifname, c, nat, pf); err != nil {
 		return err
 	}
 
