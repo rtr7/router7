@@ -187,6 +187,7 @@ ObtainOrRenew:
 				// Still not healthy? Drop DHCP lease and start from scratch.
 				log.Printf("unhealthy for 5 cycles, starting over without lease")
 				c.Ack = nil
+				continue ObtainOrRenew
 
 			case <-usr2:
 				log.Printf("SIGUSR2 received, sending DHCPRELEASE")
