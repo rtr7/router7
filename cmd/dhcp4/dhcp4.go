@@ -35,6 +35,7 @@ import (
 	"github.com/google/gopacket/layers"
 	"github.com/google/renameio"
 	"github.com/jpillora/backoff"
+	rtr7dhcp4 "github.com/rtr7/dhcp4"
 	"github.com/rtr7/router7/internal/dhcp4"
 	"github.com/rtr7/router7/internal/netconfig"
 	"github.com/rtr7/router7/internal/notify"
@@ -133,15 +134,36 @@ func logic() error {
 		Min:    10 * time.Second,
 		Max:    1 * time.Minute,
 	}
+	var lastSuccess time.Time
+	if st, err := os.Stat(ackFn); err == nil {
+		lastSuccess = st.ModTime()
+	}
+	log.Printf("last success: %v", lastSuccess)
 ObtainOrRenew:
 	for c.ObtainOrRenew() {
 		if err := c.Err(); err != nil {
 			dur := backoff.Duration()
+			// Drop the lease if we do not get a reply from the DHCP server.
+			// I observed this in practice where over a period of days,
+			// the dhcp4 client would hang like this:
+			//
+			// dhcp4.go:140: Temporary error: DHCP: read packet
+			// 42:66:f1:f1:bd:e7: i/o timeout (waiting 1m0s)
+			//
+			// For brief periods of time, we probably want to paper over such
+			// issues, but after the lease expired, we should start the DHCP
+			// exchange from scratch.
+			if c.Ack != nil && time.Since(lastSuccess) > rtr7dhcp4.LeaseFromACK(c.Ack).RenewalTime {
+				log.Printf("Temporary error: %v (dropping lease and retrying)", err)
+				c.Ack = nil
+				continue
+			}
 			log.Printf("Temporary error: %v (waiting %v)", err, dur)
 			time.Sleep(dur)
 			continue
 		}
 		backoff.Reset()
+		lastSuccess = time.Now()
 		log.Printf("lease: %+v", c.Config())
 		b, err := json.Marshal(c.Config())
 		if err != nil {
