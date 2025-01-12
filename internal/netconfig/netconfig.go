@@ -583,7 +583,7 @@ func nfifname(n string) []byte {
 //
 // Instead, it uses “fib daddr type local” to match all locally-configured IP
 // addresses and then excludes the loopback and LAN IP addresses.
-func matchUplinkIP() []expr.Any {
+func matchUplinkIP(lan0ip net.IP) []expr.Any {
 	return []expr.Any{
 		// [ payload load 4b @ network header + 16 => reg 1 ]
 		&expr.Payload{
@@ -626,7 +626,9 @@ func matchUplinkIP() []expr.Any {
 		&expr.Cmp{
 			Op:       expr.CmpOpNeq,
 			Register: 1,
-			Data:     []byte{0x0a, 0x00, 0x00, 0x00},
+			// Turn the lan0 IP address (e.g. 192.168.42.1)
+			// into a netmask like 192.168.42.0/24.
+			Data: []byte{lan0ip[0], lan0ip[1], lan0ip[2], 0},
 		},
 
 		// [ fib daddr type => reg 1 ]
@@ -644,7 +646,7 @@ func matchUplinkIP() []expr.Any {
 	}
 }
 
-func portForwardExpr(ifname string, proto uint8, portMin, portMax uint16, dest net.IP, dportMin, dportMax uint16) []expr.Any {
+func portForwardExpr(lan0ip net.IP, proto uint8, portMin, portMax uint16, dest net.IP, dportMin, dportMax uint16) []expr.Any {
 	var cmp []expr.Any
 	if portMin == portMax {
 		cmp = []expr.Any{
@@ -671,7 +673,7 @@ func portForwardExpr(ifname string, proto uint8, portMin, portMax uint16, dest n
 			},
 		}
 	}
-	ex := append(matchUplinkIP(),
+	ex := append(matchUplinkIP(lan0ip),
 		// [ meta load l4proto => reg 1 ]
 		&expr.Meta{Key: expr.MetaKeyL4PROTO, Register: 1},
 		// [ cmp eq reg 1 0x00000006 ]
@@ -781,6 +783,15 @@ func applyPortForwardings(dir, ifname string, c *nftables.Conn, nat *nftables.Ta
 		return err
 	}
 
+	lan0ip, err := LinkAddress(dir, "lan0")
+	if err != nil {
+		return err
+	}
+	lan0ip = lan0ip.To4()
+	if got, want := len(lan0ip), net.IPv4len; got != want {
+		return fmt.Errorf("lan0 does not have an IPv4 address configured: len %d != %d", got, want)
+	}
+
 	for _, fw := range cfg.Forwardings {
 		for _, proto := range strings.Split(fw.Proto, ",") {
 			var p uint8
@@ -805,7 +816,7 @@ func applyPortForwardings(dir, ifname string, c *nftables.Conn, nat *nftables.Ta
 			c.AddRule(&nftables.Rule{
 				Table: nat,
 				Chain: prerouting,
-				Exprs: portForwardExpr(ifname, p, min, max, net.ParseIP(fw.DestAddr), dmin, dmax),
+				Exprs: portForwardExpr(lan0ip, p, min, max, net.ParseIP(fw.DestAddr), dmin, dmax),
 			})
 		}
 	}
