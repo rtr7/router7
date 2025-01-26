@@ -30,7 +30,6 @@ import (
 	"github.com/google/nftables"
 	"github.com/google/nftables/binaryutil"
 	"github.com/google/nftables/expr"
-	"github.com/google/renameio"
 	"github.com/mdlayher/ethtool"
 	"github.com/vishvananda/netlink"
 	"golang.org/x/sys/unix"
@@ -436,6 +435,34 @@ func applyInterfaceFEC(details InterfaceDetails) error {
 	return nil
 }
 
+func createResolvConfIfMissing(root, contents string) error {
+	fn := filepath.Join(root, "tmp", "resolv.conf")
+
+	// Explicitly check for the file's existance
+	// just so that we can avoid printing an error
+	// in the normal case (file exists).
+	if _, err := os.Stat(fn); err == nil {
+		return nil // file already exists, do not overwrite
+	} else if !os.IsNotExist(err) {
+		return err // unexpected error
+	}
+
+	// /tmp/resolv.conf does not exist yet, create it.
+
+	// This is os.WriteFile, but with O_EXCL set
+	// so that we do not accidentally clobber the file
+	// in case another process (e.g. tailscaled) just wrote it.
+	f, err := os.OpenFile(fn, os.O_WRONLY|os.O_CREATE|os.O_TRUNC|os.O_EXCL, 0644)
+	if err != nil {
+		return err
+	}
+	_, err = f.Write([]byte(contents))
+	if err1 := f.Close(); err1 != nil && err == nil {
+		err = err1
+	}
+	return err
+}
+
 func applyInterfaces(dir, root string, cfg InterfaceConfig) error {
 	byName := make(map[string]InterfaceDetails)
 	byHardwareAddr := make(map[string]InterfaceDetails)
@@ -527,12 +554,9 @@ func applyInterfaces(dir, root string, cfg InterfaceConfig) error {
 			}
 
 			if details.Name == "lan0" {
-				b := []byte("nameserver " + addr.IP.String() + "\n")
-				fn := filepath.Join(root, "tmp", "resolv.conf")
-				if err := os.Remove(fn); err != nil && !os.IsNotExist(err) {
-					return err
-				}
-				if err := renameio.WriteFile(fn, b, 0644); err != nil {
+				// Use dnsd for the system's own DNS resolution.
+				resolvConf := "nameserver " + addr.IP.String() + "\n"
+				if err := createResolvConfIfMissing(root, resolvConf); err != nil {
 					return err
 				}
 			}
