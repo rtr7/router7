@@ -441,8 +441,17 @@ func createResolvConfIfMissing(root, contents string) error {
 	// Explicitly check for the file's existance
 	// just so that we can avoid printing an error
 	// in the normal case (file exists).
-	if _, err := os.Stat(fn); err == nil {
-		return nil // file already exists, do not overwrite
+	st, err := os.Lstat(fn)
+	if err == nil {
+		if st.Mode()&os.ModeSymlink != 0 {
+			// File is a symbolic link (at boot, gokrazy links /tmp/resolv.conf to /proc/net/pnp).
+			// Delete the link and fallthrough to create the file.
+			if err := os.Remove(fn); err != nil {
+				return err
+			}
+		} else {
+			return nil // regular file already exists, do not overwrite
+		}
 	} else if !os.IsNotExist(err) {
 		return err // unexpected error
 	}
