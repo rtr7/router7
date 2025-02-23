@@ -7,6 +7,7 @@ require (
 	github.com/digineo/go-ping v1.0.1
 	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/gokrazy/gokrazy v0.0.0-20230812092215-346db1998f83
+	github.com/gokrazy/rsync v0.2.1
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gopacket v1.1.19
 	github.com/google/nftables v0.2.1-0.20240422065334-aa8348f7904c
@@ -24,10 +25,10 @@ require (
 	github.com/rtr7/dhcp4 v0.0.0-20220302171438-18c84d089b46
 	github.com/vishvananda/netlink v1.2.1-beta.2
 	github.com/vishvananda/netns v0.0.4
-	golang.org/x/crypto v0.31.0
+	golang.org/x/crypto v0.33.0
 	golang.org/x/net v0.23.0
-	golang.org/x/sync v0.7.0
-	golang.org/x/sys v0.28.0
+	golang.org/x/sync v0.11.0
+	golang.org/x/sys v0.30.0
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20220504211119-3d4a969bb56b
 )
@@ -45,6 +46,7 @@ require (
 	github.com/mdlayher/netlink v1.7.2 // indirect
 	github.com/mdlayher/socket v0.5.0 // indirect
 	github.com/mdlayher/watchdog v0.0.0-20221003142519-49be0df7b3b5 // indirect
+	github.com/mmcloughlin/md4 v0.1.2 // indirect
 	github.com/prometheus/client_model v0.6.1 // indirect
 	github.com/prometheus/common v0.53.0 // indirect
 	github.com/prometheus/procfs v0.14.0 // indirect

@@ -16,6 +16,7 @@
 package main
 
 import (
+	"context"
 	"net"
 	"net/http"
 	"os"
@@ -23,6 +24,7 @@ import (
 	"syscall"
 
 	"github.com/gokrazy/gokrazy"
+	"github.com/gokrazy/rsync/rsyncd"
 
 	"github.com/rtr7/router7/internal/backup"
 	"github.com/rtr7/router7/internal/multilisten"
@@ -33,6 +35,51 @@ var log = teelogger.NewConsole()
 
 var httpListeners = multilisten.NewPool()
 
+var rsyncListeners = multilisten.NewPool()
+
+type rsyncListener struct {
+	addr     string
+	listener net.Listener
+	cancel   context.CancelFunc
+}
+
+func (r *rsyncListener) ListenAndServe() error {
+	ln, err := net.Listen("tcp", r.addr)
+	if err != nil {
+		return err
+	}
+	r.listener = ln
+	ctx, cancel := context.WithCancel(context.Background())
+	r.cancel = cancel
+	rsyncServer, err := rsyncd.NewServer([]rsyncd.Module{
+		{
+			Name: "perm",
+			Path: "/perm",
+		},
+	})
+	if err != nil {
+		return err
+	}
+
+	go func() {
+		if err := rsyncServer.Serve(ctx, ln); err != nil {
+			log.Print(err)
+		}
+	}()
+
+	return nil
+}
+
+func (r *rsyncListener) Close() error {
+	if r.cancel != nil {
+		r.cancel()
+		r.cancel = nil
+		r.listener.Close()
+		r.listener = nil
+	}
+	return nil
+}
+
 func updateListeners() error {
 	hosts, err := gokrazy.PrivateInterfaceAddrs()
 	if err != nil {
@@ -42,6 +89,11 @@ func updateListeners() error {
 	httpListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
 		return &http.Server{Addr: net.JoinHostPort(host, "8077")}
 	})
+
+	rsyncListeners.ListenAndServe(hosts, func(host string) multilisten.Listener {
+		return &rsyncListener{addr: net.JoinHostPort(host, "8873")} // unprivileged rsync
+	})
+
 	return nil
 }
 
