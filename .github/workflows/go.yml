@@ -9,27 +9,14 @@ on:
 jobs:
 
   build:
-    name: build
+    name: test
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
 
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v2
+    - uses: actions/setup-go@v5
       with:
-        # Run on the latest minor release of Go 1.18:
-        go-version: ^1.18
-      id: go
-
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
-
-    - name: Share cache with other actions
-      uses: actions/cache@v2
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+        go-version: 'stable'
 
     - name: Ensure all files were formatted as per gofmt
       run: |
@@ -39,59 +26,20 @@ jobs:
       run: |
         go vet
 
-    - name: Build
+    - name: Build and Test
       run: |
         go build -v ./cmd/...
-
-  test:
-    name: test
-    runs-on: ubuntu-latest
-    steps:
-
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v2
-      with:
-        # Run on the latest minor release of Go 1.18:
-        go-version: ^1.18
-      id: go
-
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
-
-    - name: Share cache with other actions
-      uses: actions/cache@v2
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
-
-    - name: Test
-      run: |
         go test -v -race ./internal/...
 
   integrationtest:
     name: integrationtest
     runs-on: ubuntu-latest
     steps:
+    - uses: actions/checkout@v4
 
-    - name: Set up Go 1.x
-      uses: actions/setup-go@v2
+    - uses: actions/setup-go@v5
       with:
-        # Run on the latest minor release of Go 1.18:
-        go-version: ^1.18
-      id: go
-
-    - name: Check out code into the Go module directory
-      uses: actions/checkout@v2
-
-    - name: Share cache with other actions
-      uses: actions/cache@v2
-      with:
-        path: ~/go/pkg/mod
-        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-        restore-keys: |
-          ${{ runner.os }}-go-
+        go-version: 'stable'
 
     - name: Build Docker container with the tools our tests require
       run: |
