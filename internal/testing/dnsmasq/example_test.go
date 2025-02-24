@@ -23,7 +23,9 @@ import (
 	"github.com/google/go-cmp/cmp"
 )
 
-func Example(t *testing.T) {
+var t *testing.T = nil // TODO: test not currently runnable
+
+func Example() {
 	dnsmasq := dnsmasq.Run(t, "veth0b", "ns0")
 	defer dnsmasq.Kill()
 	// test code here
