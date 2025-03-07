@@ -36,7 +36,11 @@ func Update(ctx context.Context, zone string, record libdns.Record, provider Rec
 
 	var updated []libdns.Record
 	for _, rec := range existing {
-		if rec.Name+"."+zone != record.Name || rec.Type != record.Type {
+		fullName := rec.Name + "." + zone
+		if rec.Name == "" {
+			fullName = zone
+		}
+		if fullName != record.Name || rec.Type != record.Type {
 			continue
 		}
 
