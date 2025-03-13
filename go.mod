@@ -7,7 +7,7 @@ require (
 	github.com/digineo/go-ping v1.0.1
 	github.com/eclipse/paho.mqtt.golang v1.4.1
 	github.com/gokrazy/gokrazy v0.0.0-20230812092215-346db1998f83
-	github.com/gokrazy/rsync v0.2.1
+	github.com/gokrazy/rsync v0.2.5
 	github.com/google/go-cmp v0.6.0
 	github.com/google/gopacket v1.1.19
 	github.com/google/nftables v0.2.1-0.20240422065334-aa8348f7904c

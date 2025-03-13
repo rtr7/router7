@@ -21,8 +21,8 @@ github.com/gokrazy/gokrazy v0.0.0-20230812092215-346db1998f83 h1:Y4sADvUYd/c0eqn
 github.com/gokrazy/gokrazy v0.0.0-20230812092215-346db1998f83/go.mod h1:9q5Tg+q+YvRjC3VG0gfMFut46dhbhtAnvUEp4lPjc6c=
 github.com/gokrazy/internal v0.0.0-20230211171410-9608422911d0 h1:QTi0skQ/OM7he/5jEWA9k/DYgdwGAhw3hrUoiPGGZHM=
 github.com/gokrazy/internal v0.0.0-20230211171410-9608422911d0/go.mod h1:ddHcxXZ/VVQOSAWcRBbkYY58+QOw4L145ye6phyDmRA=
-github.com/gokrazy/rsync v0.2.1 h1:2eHa9780NQPYet6VuLO6IyXSHLjx8k/HHP/csNW3+z0=
-github.com/gokrazy/rsync v0.2.1/go.mod h1:dz2L8Dmv1fFpRlp6YuLNZ1UIqOfFqYir14J/8efsz6w=
+github.com/gokrazy/rsync v0.2.5 h1:FOZ96QyRmQRPH/1SG5kpXUU4vj7x9aJtdiyb7eVQcII=
+github.com/gokrazy/rsync v0.2.5/go.mod h1:dz2L8Dmv1fFpRlp6YuLNZ1UIqOfFqYir14J/8efsz6w=
 github.com/google/go-cmp v0.2.0/go.mod h1:oXzfMopK8JAjlY9xF4vHSVASa0yLyX7SntLO5aqRK0M=
 github.com/google/go-cmp v0.3.0/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMywk6iLU=
 github.com/google/go-cmp v0.3.1/go.mod h1:8QqcDgzrUqlUb/G2PQTWiueGozuR1884gddMywk6iLU=
