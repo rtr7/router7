@@ -1,0 +1,2 @@
+#!/bin/sh
+rsync --exclude .git -av ./docs/ router7:/perm/srv/router7.org/
