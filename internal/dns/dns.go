@@ -46,6 +46,7 @@ type Server struct {
 	Mux *dns.ServeMux
 
 	client    *dns.Client
+	tcpClient *dns.Client
 	domain    string
 	sometimes *rate.Limiter
 	prom      struct {
@@ -69,9 +70,10 @@ func NewServer(addr, domain string) *Server {
 	hostname, _ := os.Hostname()
 	ip, _, _ := net.SplitHostPort(addr)
 	server := &Server{
-		Mux:    dns.NewServeMux(),
-		client: &dns.Client{},
-		domain: domain,
+		Mux:       dns.NewServeMux(),
+		client:    &dns.Client{},
+		tcpClient: &dns.Client{Net: "tcp"},
+		domain:    domain,
 		upstream: []string{
 			// https://developers.google.com/speed/public-dns/docs/using#google_public_dns_ip_addresses
 			"8.8.8.8:53",
@@ -423,6 +425,17 @@ func (s *Server) handleRequest(w dns.ResponseWriter, r *dns.Msg) {
 				log.Printf("resolving %v failed: %v", r.Question, err)
 			}
 			continue // fall back to next-slower upstream
+		}
+		if in.Truncated {
+			// Truncated response (exceeds UDP packet size), retry over TCP:
+			// https://www.rfc-editor.org/rfc/rfc2181#section-9
+			in, _, err = s.tcpClient.Exchange(r, u)
+			if err != nil {
+				if s.sometimes.Allow() {
+					log.Printf("resolving %v failed: %v", r.Question, err)
+				}
+				continue // fall back to next-slower upstream
+			}
 		}
 		w.WriteMsg(in)
 		if idx > 0 {
