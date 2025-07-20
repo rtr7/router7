@@ -41,10 +41,9 @@ jobs:
       with:
         go-version: 'stable'
 
-    - name: Build Docker container with the tools our tests require
-      run: |
-        docker build --pull --no-cache --rm -t=router7 -f travis/Dockerfile .
+    - uses: cachix/install-nix-action@v31
+      with:
+        nix_path: nixpkgs=channel:nixos-25.05
 
-    - name: Run tests in Docker container
-      run: |
-        exit=0; for pkg in $(go list ./integration/...); do go test -c $pkg && docker run --privileged --net=host -v $PWD:/usr/src:ro router7 /bin/sh -c "./$(basename $pkg).test -test.v" || exit=1; done; [ $exit = 0 ]
+    - name: Run tests in nix-shell
+      run: nix-shell --command 'make test'
