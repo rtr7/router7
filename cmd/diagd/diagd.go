@@ -149,7 +149,8 @@ func logic() error {
 			mu.Lock()
 			re := mJSON.Evaluate()
 			mu.Unlock()
-			if firstError(re) != "" {
+			if err := firstError(re); err != "" {
+				log.Printf("prometheus metric reporting unhealthy: %v", err)
 				return 0
 			}
 			return 1
