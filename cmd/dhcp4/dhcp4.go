@@ -28,6 +28,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"syscall"
 	"time"
 
@@ -97,7 +98,8 @@ func logic() error {
 	if err != nil {
 		return err
 	}
-	hwaddr := iface.HardwareAddr
+	// Clone the hardware address as the backing array does not remain valid.
+	hwaddr := slices.Clone(iface.HardwareAddr)
 	// The interface may not have been configured by netconfigd yet and might
 	// still use the old hardware address. We overwrite it with the address that
 	// netconfigd is going to use to fix this issue without additional

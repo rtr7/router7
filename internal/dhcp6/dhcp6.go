@@ -19,6 +19,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"slices"
 	"strconv"
 	"time"
 
@@ -115,9 +116,10 @@ func NewClient(cfg ClientConfig) (*Client, error) {
 		}
 	}
 
-	hardwareAddr := iface.HardwareAddr
+	// Clone the hardware address as the backing array does not remain valid.
+	hardwareAddr := slices.Clone(iface.HardwareAddr)
 	if cfg.HardwareAddr != nil {
-		hardwareAddr = cfg.HardwareAddr
+		hardwareAddr = slices.Clone(cfg.HardwareAddr)
 	}
 
 	var duid *dhcpv6.Duid

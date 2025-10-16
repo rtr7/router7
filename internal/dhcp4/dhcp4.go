@@ -103,7 +103,8 @@ func (c *Client) ObtainOrRenew() bool {
 			return
 		}
 		if c.hardwareAddr == nil && c.HWAddr != nil {
-			c.hardwareAddr = c.HWAddr
+			// Clone the hardware address as the backing array does not remain valid.
+			c.hardwareAddr = slices.Clone(c.HWAddr)
 		}
 		if c.hardwareAddr == nil {
 			// Defensive slices.Clone because I noticed c.hardwareAddr
