@@ -5,7 +5,7 @@ go 1.24.0
 require (
 	github.com/andreyvit/diff v0.0.0-20170406064948-c7f18ee00883
 	github.com/digineo/go-ping v1.0.1
-	github.com/eclipse/paho.mqtt.golang v1.4.1
+	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/gokrazy/gokrazy v0.0.0-20230812092215-346db1998f83
 	github.com/gokrazy/rsync v0.2.5
 	github.com/google/go-cmp v0.6.0
@@ -27,7 +27,7 @@ require (
 	github.com/vishvananda/netns v0.0.4
 	golang.org/x/crypto v0.45.0
 	golang.org/x/net v0.47.0
-	golang.org/x/sync v0.11.0
+	golang.org/x/sync v0.17.0
 	golang.org/x/sys v0.38.0
 	golang.org/x/time v0.0.0-20220722155302-e5dcc9cfc0b9
 	golang.zx2c4.com/wireguard/wgctrl v0.0.0-20220504211119-3d4a969bb56b
@@ -39,7 +39,7 @@ require (
 	github.com/digineo/go-logwrap v0.0.0-20181106161722-a178c58ea3f0 // indirect
 	github.com/gokrazy/internal v0.0.0-20230211171410-9608422911d0 // indirect
 	github.com/google/renameio/v2 v2.0.0 // indirect
-	github.com/gorilla/websocket v1.4.2 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/josharian/native v1.1.0 // indirect
 	github.com/kenshaw/evdev v0.1.0 // indirect
 	github.com/mdlayher/genetlink v1.3.2 // indirect
