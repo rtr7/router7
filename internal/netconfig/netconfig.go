@@ -323,8 +323,17 @@ func LinkAddress(dir, ifname string) (net.IP, error) {
 func applyBridges(cfg *InterfaceConfig) error {
 	for _, bridge := range cfg.Bridges {
 		if _, err := netlink.LinkByName(bridge.Name); err != nil {
-			log.Printf("creating bridge %s", bridge.Name)
-			link := &netlink.Bridge{LinkAttrs: netlink.LinkAttrs{Name: bridge.Name}}
+			linkAttrs := netlink.LinkAttrs{Name: bridge.Name}
+			// Set the bridge MAC address at creation time to avoid a race
+			// condition where dhcp4 might start before the first interface is
+			// added to the bridge and see a random kernel-assigned MAC.
+			if len(bridge.InterfaceHardwareAddrs) > 0 {
+				if hwaddr, err := net.ParseMAC(bridge.InterfaceHardwareAddrs[0]); err == nil {
+					linkAttrs.HardwareAddr = hwaddr
+				}
+			}
+			log.Printf("creating bridge %s (with hwaddr %v)", bridge.Name, linkAttrs.HardwareAddr)
+			link := &netlink.Bridge{LinkAttrs: linkAttrs}
 			if err := netlink.LinkAdd(link); err != nil {
 				return fmt.Errorf("netlink.LinkAdd: %v", err)
 			}
