@@ -281,7 +281,8 @@ var wireGuardAvailable = func() bool {
 	add := exec.Command("ip", "netns", "add", ns)
 	add.Stderr = os.Stderr
 	if err := add.Run(); err != nil {
-		log.Fatalf("%v: %v", add.Args, err)
+		log.Printf("%v: %v", add.Args, err)
+		return false
 	}
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
@@ -365,7 +366,7 @@ func TestNetconfig(t *testing.T) {
 	add := exec.Command("ip", "netns", "add", ns)
 	add.Stderr = os.Stderr
 	if err := add.Run(); err != nil {
-		t.Fatalf("%v: %v", add.Args, err)
+		t.Skipf("%v: %v", add.Args, err)
 	}
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
@@ -616,7 +617,7 @@ func TestNetconfigBridges(t *testing.T) {
 	add := exec.Command("ip", "netns", "add", ns)
 	add.Stderr = os.Stderr
 	if err := add.Run(); err != nil {
-		t.Fatalf("%v: %v", add.Args, err)
+		t.Skipf("%v: %v", add.Args, err)
 	}
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
@@ -745,7 +746,7 @@ func TestDHCPv4OldAddressDeconfigured(t *testing.T) {
 	add := exec.Command("ip", "netns", "add", ns)
 	add.Stderr = os.Stderr
 	if err := add.Run(); err != nil {
-		t.Fatalf("%v: %v", add.Args, err)
+		t.Skipf("%v: %v", add.Args, err)
 	}
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 

@@ -109,8 +109,6 @@ func (s *session) request(req *ssh.Request, prb *packetRingBuffer) (err error) {
 	default:
 		return fmt.Errorf("unknown request type: %q", req.Type)
 	}
-
-	return nil
 }
 
 func loadHostKey(path string) (ssh.Signer, error) {
@@ -183,7 +181,6 @@ func (sl *serverListener) ListenAndServe() error {
 			}
 		}(conn)
 	}
-	return nil
 }
 
 func (sl *serverListener) Close() error {

@@ -107,15 +107,13 @@ func (s *Server) Serve(ifname string, conn net.PacketConn) error {
 			return err
 		}
 	}
-
-	return nil
 }
 
 func (s *Server) ListenAndServe(ifname string) error {
 	// TODO(correctness): would it be better to listen on
 	// net.IPv6linklocalallrouters? Just specifying that results in an error,
 	// though.
-	conn, err := net.ListenIP("ip6:ipv6-icmp", &net.IPAddr{net.IPv6unspecified, ""})
+	conn, err := net.ListenIP("ip6:ipv6-icmp", &net.IPAddr{IP: net.IPv6unspecified, Zone: ""})
 	if err != nil {
 		return err
 	}

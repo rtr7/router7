@@ -1032,6 +1032,11 @@ func applyFirewall(dir, ifname string) error {
 		return err
 	}
 
+	inputRules, err := loadInputFilterRules(dir)
+	if err != nil {
+		return fmt.Errorf("input filter rules: %v", err)
+	}
+
 	filter4 := c.AddTable(&nftables.Table{
 		Family: nftables.TableFamilyIPv4,
 		Name:   "filter",
@@ -1162,6 +1167,23 @@ func applyFirewall(dir, ifname string) error {
 				},
 			},
 		})
+
+		for _, r := range inputRules {
+			ruleExprs, matchFamily, err := buildInputFilterRule(r, filter.Family)
+			if err != nil {
+				return fmt.Errorf("building input filter rule: %v", err)
+			}
+			if !matchFamily {
+				continue
+			}
+			for _, exprs := range ruleExprs {
+				c.AddRule(&nftables.Rule{
+					Table: filter,
+					Chain: input,
+					Exprs: exprs,
+				})
+			}
+		}
 
 		output := c.AddChain(&nftables.Chain{
 			Name:     "output",

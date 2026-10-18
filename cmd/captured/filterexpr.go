@@ -43,7 +43,7 @@ func gen(w io.Writer) error {
 	fmt.Fprintf(w, "import %q\n", "golang.org/x/net/bpf")
 	fmt.Fprintf(w, "var instructions = []bpf.RawInstruction{\n")
 	for _, inst := range instructions {
-		fmt.Fprintf(w, "{%d, %d, %d, %d},\n", inst.Code, inst.Jt, inst.Jf, inst.K)
+		fmt.Fprintf(w, "{Op: %d, Jt: %d, Jf: %d, K: %d},\n", inst.Code, inst.Jt, inst.Jf, inst.K)
 	}
 	fmt.Fprintf(w, "}")
 	return nil

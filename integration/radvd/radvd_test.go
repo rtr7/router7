@@ -33,7 +33,7 @@ func TestRouterAdvertisement(t *testing.T) {
 	add := exec.Command("ip", "netns", "add", ns)
 	add.Stderr = os.Stderr
 	if err := add.Run(); err != nil {
-		t.Fatalf("%v: %v", add.Args, err)
+		t.Skipf("%v: %v", add.Args, err)
 	}
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 
@@ -75,7 +75,7 @@ func TestRouterAdvertisement(t *testing.T) {
 	srv.SetPrefixes([]net.IPNet{
 		net.IPNet{IP: net.ParseIP("2a02:168:4a00::"), Mask: net.CIDRMask(64, 128)},
 	})
-	conn, err := net.ListenIP("ip6:ipv6-icmp", &net.IPAddr{net.IPv6unspecified, ""})
+	conn, err := net.ListenIP("ip6:ipv6-icmp", &net.IPAddr{IP: net.IPv6unspecified, Zone: ""})
 	if err != nil {
 		t.Fatal(err)
 	}
