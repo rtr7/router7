@@ -35,7 +35,7 @@ func TestDHCPv6(t *testing.T) {
 	add := exec.Command("ip", "netns", "add", ns)
 	add.Stderr = os.Stderr
 	if err := add.Run(); err != nil {
-		t.Fatalf("%v: %v", add.Args, err)
+		t.Skipf("%v: %v", add.Args, err)
 	}
 	defer exec.Command("ip", "netns", "delete", ns).Run()
 

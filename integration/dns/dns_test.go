@@ -27,6 +27,9 @@ import (
 )
 
 func TestDNS(t *testing.T) {
+	if _, err := exec.LookPath("dig"); err != nil {
+		t.Skipf("skipping test: %v", err)
+	}
 	srv := dns.NewServer("localhost:4453", "lan")
 	s := &miekgdns.Server{Addr: "localhost:4453", Net: "udp", Handler: srv.Mux}
 	go s.ListenAndServe()
